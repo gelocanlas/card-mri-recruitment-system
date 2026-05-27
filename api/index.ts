@@ -447,13 +447,20 @@ app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
 // ---------- APPLICATIONS ----------
 app.get("/api/applications", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
+  let dbApps: any[] = [];
   try {
     if (sbClient) {
-      const { data, error } = await sbClient.from("applicants").select("*").order("applied_at", { ascending: false });
-      if (!error && data) return res.json(data);
+      const { data, error } = await sbClient.from("applicants").select("*").order("created_at", { ascending: false });
+      if (!error && data) dbApps = data;
     }
   } catch {}
-  res.json(memoryApplications);
+  const seen = new Set(dbApps.map((a: any) => a.id));
+  for (const mem of memoryApplications) {
+    if (!seen.has(mem.id)) {
+      dbApps.push(mem);
+    }
+  }
+  res.json(dbApps);
 });
 
 app.post("/api/applications", async (req: any, res: any) => {

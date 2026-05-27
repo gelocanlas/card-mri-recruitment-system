@@ -340,87 +340,56 @@ export default function DashboardPage({
   };
 
   // Fetch job application lists
-  const fetchApplications = async () => {
+  const fetchApplications = async (): Promise<JobApplication[]> => {
     setLoading(true);
     setError("");
     try {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        const { data, error } = await supabase
-          .from("applicants")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        if (data) {
-          // Map to JobApplication frontend typescript interfaces
-          const mappedData: JobApplication[] = data.map((item: any) => ({
-            id: item.id,
-            applicant_id: item.applicant_id || "public-guest-generic",
-            fullName: item.full_name,
-            email: item.email,
-            phone: item.phone || "",
-            job_id: item.job_id || "manual-generic",
-            jobTitle: item.job_id 
-              ? (jobs.find((j: any) => j.id === item.job_id)?.title || item.job_title || "General Vacancy")
-              : (item.job_title || "General Vacancy"),
-            resumeFileName: item.resume_file_name || "Profile_Screening_Form.pdf",
-            resumeText: item.resume_text || `Applicant: ${item.full_name}. Reg: ${new Date(item.created_at).toLocaleString()}.`,
-            status: item.status,
-            age: item.age,
-            civilStatus: item.civil_status,
-            address: item.address,
-            educationLevel: item.education_level,
-            courseGraduated: item.course_graduated || "",
-            endorsedTo: item.endorsed_to || "",
-            hrIncharge: item.hr_incharge || "",
-            remarks: item.remarks || "",
-            applied_at: item.applied_at || item.created_at,
-            screeningAnswers: Array.isArray(item.screening_answers)
-              ? item.screening_answers
-              : typeof item.screening_answers === "string"
-                ? JSON.parse(item.screening_answers)
-                : [],
-            ai_summary: {
-              summary: item.remarks || "No evaluation remarks recorded.",
-              skills: ["Database Verified"],
-              education: item.education_level || "College Graduate",
-              match_score: 95
-            }
-          }));
-
-          setApplications(mappedData);
-          setTotalApps(mappedData.length);
-          const onProcessStatuses = ['New', 'Acknowledge', 'Passed Screening', 'Pending', 'Screening', 'Interview', 'Technical Assessment'];
-          setPendingCount(mappedData.filter((a: any) => onProcessStatuses.includes(a.status)).length);
-          setHiredCount(mappedData.filter((a: any) => a.status === 'Hired').length);
-          setEndorsedCount(mappedData.filter((a: any) => a.status === 'Already Endorsed' || a.endorsedTo).length);
-          setRejectedCount(mappedData.filter((a: any) => a.status === 'Rejected' || a.status === 'Rejected (With Relatives)').length);
-          return mappedData;
-        }
+      const res = await fetch("/api/applications", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("card_mri_token")}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mappedData: JobApplication[] = data.map((item: any) => ({
+          id: item.id,
+          applicant_id: item.applicant_id || item.applicantId || "public-guest-generic",
+          fullName: item.fullName || item.full_name,
+          email: item.email,
+          phone: item.phone || "",
+          job_id: item.job_id || item.jobId || "manual-generic",
+          jobTitle: (item.job_title || item.jobTitle)
+            ? (jobs.find((j: any) => j.id === (item.job_id || item.jobId))?.title || item.job_title || item.jobTitle || "General Vacancy")
+            : "General Vacancy",
+          resumeFileName: item.resume_file_name || item.resumeFileName || "Profile_Screening_Form.pdf",
+          resumeText: item.resume_text || item.resumeText || `Applicant: ${item.fullName || item.full_name}.`,
+          status: item.status,
+          age: item.age,
+          civilStatus: item.civil_status || item.civilStatus || "Single",
+          address: item.address || "",
+          educationLevel: item.education_level || item.educationLevel || "College Graduate",
+          courseGraduated: item.course_graduated || item.courseGraduated || "",
+          endorsedTo: item.endorsed_to || item.endorsedTo || "",
+          hrIncharge: item.hr_incharge || item.hrIncharge || "",
+          remarks: item.remarks || "",
+          applied_at: item.applied_at || item.appliedAt || item.created_at || item.createdAt,
+          screeningAnswers: Array.isArray(item.screening_answers || item.screeningAnswers)
+            ? (item.screening_answers || item.screeningAnswers)
+            : [],
+          ai_summary: item.ai_summary || {
+            summary: item.remarks || "No evaluation remarks recorded.",
+            skills: ["Database Verified"],
+            education: item.education_level || item.educationLevel || "College Graduate",
+            match_score: 95
+          }
+        }));
+        setApplications(mappedData);
+        return mappedData;
+      } else {
+        throw new Error("Failed to fetch applications");
       }
-
-      // Fallback
-      const res = await authFetch("/api/applications");
-      if (!res.ok) throw new Error("Could not download candidate evaluation queues.");
-      const data = await res.json();
-      setApplications(data);
-
-      setTotalApps(data.length);
-      
-      // On Process = status in ['New', 'Acknowledge', 'Passed Screening', 'Pending', 'Screening', 'Interview', 'Technical Assessment']
-      const onProcessStatuses = ['New', 'Acknowledge', 'Passed Screening', 'Pending', 'Screening', 'Interview', 'Technical Assessment'];
-      setPendingCount(data.filter((a: any) => onProcessStatuses.includes(a.status)).length);
-      
-      setHiredCount(data.filter((a: any) => a.status === 'Hired').length);
-      setEndorsedCount(data.filter((a: any) => a.status === 'Already Endorsed' || a.endorsedTo).length);
-      setRejectedCount(data.filter((a: any) => a.status === 'Rejected' || a.status === 'Rejected (With Relatives)').length);
-      return data;
     } catch (err: any) {
-      setError(err.message);
+      console.error(err.message || err);
+      setError(err.message || "Failed to load applications.");
+      return [];
     } finally {
       setLoading(false);
     }
