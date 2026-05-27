@@ -191,13 +191,11 @@ app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
 // ---------- JOBS ----------
 app.get("/api/jobs", async (_req: any, res: any) => {
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("jobs").select("*").order("created_at", { ascending: false });
-      if (!error && data) return res.json(data.map(mapJobToFrontend));
-    }
-  } catch {}
-  res.json(memoryJobs.map(mapJobToFrontend));
+  let dbJobs: any[] = [];
+  try { if (sbClient) { const { data, error } = await sbClient.from("jobs").select("*").order("created_at", { ascending: false }); if (!error && data) dbJobs = data; } } catch {}
+  const seen = new Set(dbJobs.map((j: any) => j.id));
+  for (const mem of memoryJobs) { if (!seen.has(mem.id)) { dbJobs.push(mem); } }
+  res.json(dbJobs.map(mapJobToFrontend));
 });
 
 app.post("/api/jobs", async (req: any, res: any) => {
@@ -217,7 +215,7 @@ app.post("/api/jobs", async (req: any, res: any) => {
     };
     if (sbClient) {
       const { error } = await sbClient.from("jobs").insert([job]);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
     }
     memoryJobs.push(job);
     savePersistedData("jobs", memoryJobs);
@@ -242,7 +240,7 @@ app.put("/api/jobs/:id", async (req: any, res: any) => {
 
     if (sbClient) {
       const { error } = await sbClient.from("jobs").update(updates).eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
     }
     const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
     if (idx !== -1) {
@@ -259,7 +257,7 @@ app.delete("/api/jobs/:id", async (req: any, res: any) => {
   try {
     if (sbClient) {
       const { error } = await sbClient.from("jobs").delete().eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
     }
     const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
     if (idx !== -1) { memoryJobs.splice(idx, 1); savePersistedData("jobs", memoryJobs); }
@@ -295,10 +293,11 @@ app.post("/api/auth/login", async (req: any, res: any) => {
 app.get("/api/users", async (req: any, res: any) => {
   if (!checkAdmin(req, res)) return;
   try {
-    let users: any[] = [];
-    try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) users = data; } } catch {}
-    if (users.length === 0) users = memoryUsers;
-    res.json(users.map(mapUserToFrontend));
+    let dbUsers: any[] = [];
+    try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) dbUsers = data; } } catch {}
+    const seen = new Set(dbUsers.map((u: any) => u.id));
+    for (const mem of memoryUsers) { if (!seen.has(mem.id)) { dbUsers.push(mem); } }
+    res.json(dbUsers.map(mapUserToFrontend));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -320,7 +319,7 @@ app.post("/api/users", async (req: any, res: any) => {
     };
     if (sbClient) {
       const { error } = await sbClient.from("users").insert([user]);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
     }
     memoryUsers.push(user);
     savePersistedData("users", memoryUsers);
@@ -342,7 +341,7 @@ app.put("/api/users/:id", async (req: any, res: any) => {
 
     if (sbClient) {
       const { error } = await sbClient.from("users").update(updates).eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
     }
     const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
     if (idx !== -1) {
@@ -360,7 +359,7 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
     const actorName = req.query.actorName || req.body?.actorName || req.user?.fullName || req.user?.email;
     if (sbClient) {
       const { error } = await sbClient.from("users").delete().eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
     }
     const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
     if (idx !== -1) { memoryUsers.splice(idx, 1); savePersistedData("users", memoryUsers); }
@@ -371,13 +370,11 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
 
 // ---------- SCREENING QUESTIONS ----------
 app.get("/api/screening-questions", async (_req: any, res: any) => {
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("screening_questions").select("*").order("sort_order");
-      if (!error && data) return res.json(data);
-    }
-  } catch {}
-  res.json(memoryScreeningQuestions);
+  let dbQuestions: any[] = [];
+  try { if (sbClient) { const { data, error } = await sbClient.from("screening_questions").select("*").order("sort_order"); if (!error && data) dbQuestions = data; } } catch {}
+  const seen = new Set(dbQuestions.map((q: any) => q.id));
+  for (const mem of memoryScreeningQuestions) { if (!seen.has(mem.id)) { dbQuestions.push(mem); } }
+  res.json(dbQuestions);
 });
 
 app.post("/api/screening-questions", async (req: any, res: any) => {
@@ -396,7 +393,7 @@ app.post("/api/screening-questions", async (req: any, res: any) => {
       const dbPayload = { ...q, is_active: q.isActive, sort_order: q.sort_order };
       delete (dbPayload as any).isActive;
       const { error } = await sbClient.from("screening_questions").insert([dbPayload]);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
     }
     memoryScreeningQuestions.push(q);
     savePersistedData("screeningQuestions", memoryScreeningQuestions);
@@ -418,7 +415,7 @@ app.put("/api/screening-questions/:id", async (req: any, res: any) => {
 
     if (sbClient) {
       const { error } = await sbClient.from("screening_questions").update(updates).eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
     }
     const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
     if (idx !== -1) {
@@ -435,7 +432,7 @@ app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
   try {
     if (sbClient) {
       const { error } = await sbClient.from("screening_questions").delete().eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
     }
     const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
     if (idx !== -1) { memoryScreeningQuestions.splice(idx, 1); savePersistedData("screeningQuestions", memoryScreeningQuestions); }
@@ -531,7 +528,7 @@ app.patch("/api/applications/:id", async (req: any, res: any) => {
 
     if (sbClient) {
       const { error } = await sbClient.from("applicants").update(updates).eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
     }
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) {
@@ -573,7 +570,7 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
     const actorName = req.body?.actorName || req.query?.actorName || req.user?.fullName || req.user?.email;
     if (sbClient) {
       const { error } = await sbClient.from("applicants").delete().eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
     }
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) { memoryApplications.splice(idx, 1); savePersistedData("applications", memoryApplications); }
@@ -584,13 +581,9 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
 
 // ---------- SETTINGS ----------
 app.get("/api/homepage-settings", async (_req: any, res: any) => {
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("homepage_settings").select("*").maybeSingle();
-      if (!error && data) return res.json(data);
-    }
-  } catch {}
-  res.json(memoryHomepageSettings);
+  let db: any = null;
+  try { if (sbClient) { const { data } = await sbClient.from("homepage_settings").select("*").maybeSingle(); if (data) db = data; } } catch {}
+  res.json(db ? { ...db, ...memoryHomepageSettings } : memoryHomepageSettings);
 });
 
 app.put("/api/homepage-settings", async (req: any, res: any) => {
@@ -611,10 +604,10 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
       const { data: existing } = await sbClient.from("homepage_settings").select("id").eq("id", 1).maybeSingle();
       if (existing) {
         const { error } = await sbClient.from("homepage_settings").update(settings).eq("id", 1);
-        if (error) throw new Error(error.message);
+        if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
       } else {
         const { error } = await sbClient.from("homepage_settings").insert([{ id: 1, ...settings }]);
-        if (error) throw new Error(error.message);
+        if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
       }
     }
     Object.assign(memoryHomepageSettings, body);
@@ -625,13 +618,9 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
 });
 
 app.get("/api/about-settings", async (_req: any, res: any) => {
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("about_settings").select("*").maybeSingle();
-      if (!error && data) return res.json(data);
-    }
-  } catch {}
-  res.json(memoryAboutSettings);
+  let db: any = null;
+  try { if (sbClient) { const { data } = await sbClient.from("about_settings").select("*").maybeSingle(); if (data) db = data; } } catch {}
+  res.json(db ? { ...db, ...memoryAboutSettings } : memoryAboutSettings);
 });
 
 app.put("/api/about-settings", async (req: any, res: any) => {
@@ -655,10 +644,10 @@ app.put("/api/about-settings", async (req: any, res: any) => {
       const { data: existing } = await sbClient.from("about_settings").select("id").eq("id", 1).maybeSingle();
       if (existing) {
         const { error } = await sbClient.from("about_settings").update(settings).eq("id", 1);
-        if (error) throw new Error(error.message);
+        if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
       } else {
         const { error } = await sbClient.from("about_settings").insert([{ id: 1, ...settings }]);
-        if (error) throw new Error(error.message);
+        if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
       }
     }
     Object.assign(memoryAboutSettings, body);
@@ -669,14 +658,10 @@ app.put("/api/about-settings", async (req: any, res: any) => {
 });
 
 app.get("/api/system-settings/:key", async (req: any, res: any) => {
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("system_settings").select("value").eq("key", req.params.key).maybeSingle();
-      if (!error && data) return res.json({ value: data.value });
-    }
-  } catch {}
-  const val = memorySystemSettings[req.params.key];
-  res.json({ value: val || null });
+  let dbVal: any = null;
+  try { if (sbClient) { const { data } = await sbClient.from("system_settings").select("value").eq("key", req.params.key).maybeSingle(); if (data) dbVal = data.value; } } catch {}
+  const memVal = memorySystemSettings[req.params.key];
+  res.json({ value: memVal !== undefined ? memVal : dbVal });
 });
 
 app.put("/api/system-settings/:key", async (req: any, res: any) => {
@@ -686,7 +671,7 @@ app.put("/api/system-settings/:key", async (req: any, res: any) => {
     const { value } = req.body;
     if (sbClient) {
       const { error } = await sbClient.from("system_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase upsert failed (falling back to memory):", error.message);
     }
     memorySystemSettings[key] = value;
     savePersistedData("systemSettings", memorySystemSettings);
@@ -698,13 +683,11 @@ app.put("/api/system-settings/:key", async (req: any, res: any) => {
 // ---------- SYSTEM LOGS ----------
 app.get("/api/system-logs", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("system_logs").select("*").order("timestamp", { ascending: false }).limit(200);
-      if (!error && data) return res.json(data);
-    }
-  } catch {}
-  res.json(memorySystemLogs);
+  let dbLogs: any[] = [];
+  try { if (sbClient) { const { data, error } = await sbClient.from("system_logs").select("*").order("timestamp", { ascending: false }).limit(200); if (!error && data) dbLogs = data; } } catch {}
+  const seen = new Set(dbLogs.map((l: any) => l.id));
+  for (const mem of memorySystemLogs) { if (!seen.has(mem.id)) { dbLogs.push(mem); } }
+  res.json(dbLogs);
 });
 
 // Global error handler
