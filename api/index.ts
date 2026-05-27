@@ -1,5 +1,6 @@
 ﻿import express from "express";
-import { GoogleGenAI, Type } from "@google/genai";
+// Dynamic import only when needed (Vercel runtime compatibility)
+// import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { runDatabaseSetup } from "./dbSetup";
 import bcrypt from "bcryptjs";
@@ -429,11 +430,12 @@ function sanitizeString(str: any): string {
 }
 
 // Lazy initialize Gemini API client utility with User-Agent heading
-const getGeminiClient = () => {
+const getGeminiClient = async () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
     throw new Error("GEMINI_API_KEY environment variable is not configured on the host server.");
   }
+  const { GoogleGenAI } = await import("@google/genai");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -2120,7 +2122,8 @@ app.post("/api/analyze-resume", async (req, res) => {
     }
 
     try {
-      const ai = getGeminiClient();
+      const { GoogleGenAI: GenAIClient, Type: GenAIType } = await import("@google/genai");
+      const ai = await getGeminiClient();
 
       const userRequirementsString = Array.isArray(jobRequirements) 
         ? jobRequirements.join(", ") 
@@ -2156,13 +2159,13 @@ Constraints:
         config: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: GenAIType.OBJECT,
             properties: {
-              summary: { type: Type.STRING },
-              skills: { type: Type.ARRAY, items: { type: Type.STRING } },
-              education: { type: Type.STRING },
-              match_score: { type: Type.INTEGER },
-              recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+              summary: { type: GenAIType.STRING },
+              skills: { type: GenAIType.ARRAY, items: { type: GenAIType.STRING } },
+              education: { type: GenAIType.STRING },
+              match_score: { type: GenAIType.INTEGER },
+              recommendations: { type: GenAIType.ARRAY, items: { type: GenAIType.STRING } }
             },
             required: ["summary", "skills", "education", "match_score", "recommendations"]
           }
