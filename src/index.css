@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,505;0,600;0,700;0,800;1,400&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Warm Backgrounds */
+  --bg-base: #F7F5F0;          /* Main page background — warm off-white */
+  --bg-surface: #FDFCFA;       /* Card/panel surface — near white warm */
+  --bg-surface-2: #F0EDE6;     /* Slightly deeper warm — section dividers */
+  --bg-dark-header: #0F172A;   /* Keep existing dark header — unchanged */
+
+  /* Warm Neutrals */
+  --text-primary: #1A1714;     /* Near-black warm — main text */
+  --text-secondary: #6B6560;   /* Warm gray — secondary labels */
+  --text-muted: #9C9590;       /* Warm light gray — placeholders */
+
+  /* Brand Greens — keep existing emerald scale */
+  --brand-primary: #059669;    /* emerald-600 */
+  --brand-dark: #047857;       /* emerald-700 */
+  --brand-light: #D1FAE5;      /* emerald-100 */
+
+  /* Warm Shadows */
+  --shadow-card: 0 2px 16px -4px rgba(26, 23, 20, 0.08), 
+                 0 1px 4px -1px rgba(26, 23, 20, 0.04);
+  --shadow-card-hover: 0 8px 32px -8px rgba(26, 23, 20, 0.12), 
+                       0 2px 8px -2px rgba(26, 23, 20, 0.06);
+  --shadow-modal: 0 24px 64px -12px rgba(26, 23, 20, 0.18);
+
+  /* Border */
+  --border-warm: rgba(26, 23, 20, 0.08);
+  --border-warm-strong: rgba(26, 23, 20, 0.14);
+
+  /* Radius */
+  --radius-card: 20px;
+  --radius-modal: 28px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+  --radius-badge: 999px;
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  html, body {
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background-color: #F7F5F0; /* Warm off-white background */
+    font-family: var(--font-sans);
+    color: #1A1714;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    color: #1A1714;
+  }
+}
+
+/* ==========================================
+   OFFICIAL PRINT STYLESHEET (Requirement 5)
+   ========================================== */
+@media print {
+  /* Hide the entire website contents, headers, bars, side elements, modals, etc. but display ONLY the report modal */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  /* Robust visibility toggle: hide everything inside body, but explicitly make the report visible */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .report-pdf-backdrop,
+  .report-pdf-backdrop * {
+    visibility: visible !important;
+  }
+
+  /* Make the backdrop acts as a normal static block container instead of fixed fullscreen backdrop */
+  .report-pdf-backdrop {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    z-index: 10000 !important;
+  }
+
+  /* Transform the report modal box to a flat, single page content flow format with precise printing padding & margins */
+  .report-pdf-modal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 1cm !important;
+    margin: 0 !important;
+    display: block !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Ensure page break rules prevent table rows and headers from being broken awkwardly */
+  tr, blockquote, pre, .p-3 {
+    page-break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  /* Normalizing table text formatting for high clarity ink printing */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    color: black !important;
+    padding: 6px 10px !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+  }
+
+  /* Remove scrollbars and background styling noise */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Explicit page margin directive to disable default headers, footers, and set comfortable margins */
+  @page {
+    margin: 2cm;
+    size: auto;
+  }
+}

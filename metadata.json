@@ -1,0 +1,6 @@
+{
+  "name": "CARD MRI Job Catalog & Recruitment Monitoring System",
+  "description": "A dynamic job catalog and candidate recruitment tracker with secure multi-role access and Gemini-powered resume analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
