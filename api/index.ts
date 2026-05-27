@@ -1,3 +1,5 @@
-import app from "../server";
+import expressApp from "../server";
 
-export default app;
+export default function handler(req: any, res: any) {
+  return expressApp(req, res);
+}

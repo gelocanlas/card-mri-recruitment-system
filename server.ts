@@ -2233,13 +2233,7 @@ async function startServer() {
 }
 
 // Only start the server when run directly (not imported by Vercel serverless runtime)
-const isDirectExecution = process.argv[1] && (
-  process.argv[1].includes("server.ts") || 
-  process.argv[1].includes("server.js") ||
-  process.argv[1].includes("dist\\server.cjs") ||
-  process.argv[1].includes("dist/server.cjs")
-);
-if (isDirectExecution) {
+if (!process.env.VERCEL) {
   startServer();
 }
 
