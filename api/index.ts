@@ -93,7 +93,14 @@ app.post("/api/auth/login", async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/users", requireAuth, async (_req: any, res: any) => {
+app.get("/api/users", (req: any, res: any, next: any) => {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    req.user = jwt.verify(auth.split(" ")[1], JWT_SECRET);
+    next();
+  } catch (e: any) { res.status(401).json({ error: "Invalid token", detail: e.message }); }
+}, async (_req: any, res: any) => {
   try {
     let users: any[] = [];
     try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) users = data; } } catch {}
