@@ -463,6 +463,12 @@ app.get("/api/applications", async (req: any, res: any) => {
   res.json(dbApps);
 });
 
+// Returns only in-memory applications (for frontend supplement)
+app.get("/api/api-only-applications", (req: any, res: any) => {
+  if (!checkAuth(req, res)) return;
+  res.json(memoryApplications);
+});
+
 app.post("/api/applications", async (req: any, res: any) => {
   try {
     const body = req.body;

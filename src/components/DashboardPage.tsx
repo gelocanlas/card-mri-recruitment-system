@@ -344,48 +344,119 @@ export default function DashboardPage({
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/applications", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("card_mri_token")}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const mappedData: JobApplication[] = data.map((item: any) => ({
-          id: item.id,
-          applicant_id: item.applicant_id || item.applicantId || "public-guest-generic",
-          fullName: item.fullName || item.full_name,
-          email: item.email,
-          phone: item.phone || "",
-          job_id: item.job_id || item.jobId || "manual-generic",
-          jobTitle: (item.job_title || item.jobTitle)
-            ? (jobs.find((j: any) => j.id === (item.job_id || item.jobId))?.title || item.job_title || item.jobTitle || "General Vacancy")
-            : "General Vacancy",
-          resumeFileName: item.resume_file_name || item.resumeFileName || "Profile_Screening_Form.pdf",
-          resumeText: item.resume_text || item.resumeText || `Applicant: ${item.fullName || item.full_name}.`,
-          status: item.status,
-          age: item.age,
-          civilStatus: item.civil_status || item.civilStatus || "Single",
-          address: item.address || "",
-          educationLevel: item.education_level || item.educationLevel || "College Graduate",
-          courseGraduated: item.course_graduated || item.courseGraduated || "",
-          endorsedTo: item.endorsed_to || item.endorsedTo || "",
-          hrIncharge: item.hr_incharge || item.hrIncharge || "",
-          remarks: item.remarks || "",
-          applied_at: item.applied_at || item.appliedAt || item.created_at || item.createdAt,
-          screeningAnswers: Array.isArray(item.screening_answers || item.screeningAnswers)
-            ? (item.screening_answers || item.screeningAnswers)
-            : [],
-          ai_summary: item.ai_summary || {
-            summary: item.remarks || "No evaluation remarks recorded.",
-            skills: ["Database Verified"],
-            education: item.education_level || item.educationLevel || "College Graduate",
-            match_score: 95
-          }
-        }));
-        setApplications(mappedData);
-        return mappedData;
-      } else {
-        throw new Error("Failed to fetch applications");
+      const supabase = getSupabaseClient();
+      let allMapped: JobApplication[] = [];
+
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("applicants")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && data) {
+          allMapped = data.map((item: any) => ({
+            id: item.id,
+            applicant_id: item.applicant_id || "public-guest-generic",
+            fullName: item.full_name,
+            email: item.email,
+            phone: item.phone || "",
+            job_id: item.job_id || "manual-generic",
+            jobTitle: item.job_id
+              ? (jobs.find((j: any) => j.id === item.job_id)?.title || item.job_title || "General Vacancy")
+              : (item.job_title || "General Vacancy"),
+            resumeFileName: item.resume_file_name || "Profile_Screening_Form.pdf",
+            resumeText: item.resume_text || `Applicant: ${item.full_name}. Reg: ${new Date(item.created_at).toLocaleString()}.`,
+            status: item.status,
+            age: item.age,
+            civilStatus: item.civil_status,
+            address: item.address,
+            educationLevel: item.education_level,
+            courseGraduated: item.course_graduated || "",
+            endorsedTo: item.endorsed_to || "",
+            hrIncharge: item.hr_incharge || "",
+            remarks: item.remarks || "",
+            applied_at: item.applied_at || item.created_at,
+            screeningAnswers: Array.isArray(item.screening_answers)
+              ? item.screening_answers
+              : typeof item.screening_answers === "string"
+                ? JSON.parse(item.screening_answers)
+                : [],
+            ai_summary: {
+              summary: item.remarks || "No evaluation remarks recorded.",
+              skills: ["Database Verified"],
+              education: item.education_level || "College Graduate",
+              match_score: 95
+            }
+          }));
+        }
       }
+
+      // Supplement with memory-only applications from the API
+      try {
+        const res2 = await fetch("/api/api-only-applications", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("card_mri_token")}` }
+        });
+        if (res2.ok) {
+          const memoryApps = await res2.json();
+          const existingIds = new Set(allMapped.map(a => a.id));
+          for (const mem of memoryApps) {
+            if (!existingIds.has(mem.id)) {
+              allMapped.push({
+                id: mem.id,
+                applicant_id: "public-guest-generic",
+                fullName: mem.full_name || "Unknown",
+                email: mem.email || "",
+                phone: mem.phone || "",
+                job_id: mem.job_id || "manual-generic",
+                jobTitle: mem.job_title || "General Vacancy",
+                resumeFileName: mem.resume_file_name || "Profile_Screening_Form.pdf",
+                resumeText: mem.resume_text || "",
+                status: mem.status || "New",
+                age: mem.age,
+                civilStatus: mem.civil_status || "Single",
+                address: mem.address || "",
+                educationLevel: mem.education_level || "College Graduate",
+                courseGraduated: mem.course_graduated || "",
+                endorsedTo: mem.endorsed_to || "",
+                hrIncharge: mem.hr_incharge || "",
+                remarks: mem.remarks || "",
+                applied_at: mem.applied_at || mem.created_at,
+                screeningAnswers: Array.isArray(mem.screening_answers) ? mem.screening_answers : [],
+                ai_summary: {
+                  summary: mem.remarks || "No evaluation remarks recorded.",
+                  skills: ["Database Verified"],
+                  education: mem.education_level || "College Graduate",
+                  match_score: 95
+                }
+              });
+              existingIds.add(mem.id);
+            }
+          }
+        }
+      } catch {}
+
+      if (allMapped.length > 0) {
+        setApplications(allMapped);
+        setTotalApps(allMapped.length);
+        const onProcessStatuses = ['New', 'Acknowledge', 'Passed Screening', 'Pending', 'Screening', 'Interview', 'Technical Assessment'];
+        setPendingCount(allMapped.filter((a: any) => onProcessStatuses.includes(a.status)).length);
+        setHiredCount(allMapped.filter((a: any) => a.status === 'Hired').length);
+        setEndorsedCount(allMapped.filter((a: any) => a.status === 'Already Endorsed' || a.endorsedTo).length);
+        setRejectedCount(allMapped.filter((a: any) => a.status === 'Rejected' || a.status === 'Rejected (With Relatives)').length);
+        return allMapped;
+      }
+
+      // Fallback to API if Supabase + memory supplement both returned nothing
+      const res = await authFetch("/api/applications");
+      if (!res.ok) throw new Error("Could not load candidate evaluation queues.");
+      const apiData = await res.json();
+      setApplications(apiData);
+      setTotalApps(apiData.length);
+      const onProcessStatuses = ['New', 'Acknowledge', 'Passed Screening', 'Pending', 'Screening', 'Interview', 'Technical Assessment'];
+      setPendingCount(apiData.filter((a: any) => onProcessStatuses.includes(a.status)).length);
+      setHiredCount(apiData.filter((a: any) => a.status === 'Hired').length);
+      setEndorsedCount(apiData.filter((a: any) => a.status === 'Already Endorsed' || a.endorsedTo).length);
+      setRejectedCount(apiData.filter((a: any) => a.status === 'Rejected' || a.status === 'Rejected (With Relatives)').length);
+      return apiData;
     } catch (err: any) {
       console.error(err.message || err);
       setError(err.message || "Failed to load applications.");
