@@ -93,7 +93,7 @@ app.post("/api/auth/login", async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/users", (req: any, res: any, next: any) => { console.log("USERS MW"); next(); }, async (_req: any, res: any) => {
+app.get("/api/users", requireAuth, async (_req: any, res: any) => {
   try {
     let users: any[] = [];
     try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) users = data; } } catch {}
