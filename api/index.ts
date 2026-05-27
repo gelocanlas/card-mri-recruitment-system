@@ -60,6 +60,64 @@ const loginRateLimiter = (req: any, res: any, next: any) => next();
 // Health
 app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
+// Jobs
+app.get("/api/jobs", async (_req: any, res: any) => {
+  try {
+    if (sbClient) {
+      const { data, error } = await sbClient.from("jobs").select("*").order("created_at", { ascending: false });
+      if (!error && data) return res.json(data.map(mapJobToFrontend));
+    }
+  } catch {}
+  res.json(memoryJobs.map(mapJobToFrontend));
+});
+
+// Auth login
+app.post("/api/auth/login", loginRateLimiter, async (req: any, res: any) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+    let dbUser: any = memoryUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+    if (dbUser) {
+      const match = await bcrypt.compare(password, dbUser.password);
+      if (!match) return res.status(401).json({ error: "Invalid password" });
+      const token = jwt.sign({ id: dbUser.id, email, role: dbUser.role, fullName: dbUser.fullName }, JWT_SECRET, { expiresIn: "6h" });
+      return res.json({ message: "Login ok", user: { ...mapUserToFrontend(dbUser), token } });
+    }
+    return res.status(401).json({ error: "User not found" });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Users
+app.get("/api/users", requireAdmin, async (_req: any, res: any) => {
+  res.json(memoryUsers.map(mapUserToFrontend));
+});
+
+// Screening questions
+app.get("/api/screening-questions", async (_req: any, res: any) => {
+  res.json(memoryScreeningQuestions);
+});
+
+// System settings
+app.get("/api/system-settings/:key", async (req: any, res: any) => {
+  const fallbacks: any = { institutions_list: ["CARD Bank", "CARD SME Bank"] };
+  res.json({ value: fallbacks[req.params.key] || [] });
+});
+
+// Applications
+app.get("/api/applications", requireAuth, async (_req: any, res: any) => {
+  res.json(initialApplications);
+});
+
+// Homepage settings
+app.get("/api/homepage-settings", async (_req: any, res: any) => {
+  res.json(defaultHomepageSettings);
+});
+
+// About settings
+app.get("/api/about-settings", async (_req: any, res: any) => {
+  res.json({});
+});
+
 // Error handler
 app.use((err: any, _req: any, res: any, _next: any) => res.status(500).json({ error: err?.message || "Error" }));
 
