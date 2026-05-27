@@ -46,9 +46,12 @@ function mapUserToFrontend(u: any) { return u; }
 function mapSettingsToFrontend(s: any) { return defaultHomepageSettings; }
 
 function requireAuth(req: any, res: any, next: any) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
-  try { req.user = jwt.verify(auth.split(" ")[1], JWT_SECRET); next(); } catch { res.status(401).json({ error: "Invalid token" }); }
+  try {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return; }
+    req.user = jwt.verify(auth.split(" ")[1], JWT_SECRET);
+    next();
+  } catch (e: any) { res.status(401).json({ error: "Invalid token", detail: e.message }); }
 }
 function requireAdmin(req: any, res: any, next: any) {
   requireAuth(req, res, () => req.user?.role === "it_admin" ? next() : res.status(403).json({ error: "Forbidden" }));
@@ -58,7 +61,7 @@ const loginAttempts = new Map<string, any>();
 const loginRateLimiter = (req: any, res: any, next: any) => next();
 
 // Health
-app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
+app.get("/api/health", (req: any, res: any) => res.json({ status: "ok", path: req.path }));
 
 // Jobs
 app.get("/api/jobs", async (_req: any, res: any) => {
@@ -71,20 +74,19 @@ app.get("/api/jobs", async (_req: any, res: any) => {
   res.json(memoryJobs.map(mapJobToFrontend));
 });
 
-// Auth login
-app.post("/api/auth/login", loginRateLimiter, async (req: any, res: any) => {
+// Auth login (no rate limiter)
+app.post("/api/auth/login", async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
-    let dbUser: any = memoryUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-    if (dbUser) {
-      const match = await bcrypt.compare(password, dbUser.password);
-      if (!match) return res.status(401).json({ error: "Invalid password" });
-      const token = jwt.sign({ id: dbUser.id, email, role: dbUser.role, fullName: dbUser.fullName }, JWT_SECRET, { expiresIn: "6h" });
-      return res.json({ message: "Login ok", user: { ...mapUserToFrontend(dbUser), token } });
-    }
-    return res.status(401).json({ error: "User not found" });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    if (!email || !password) { res.status(400).json({ error: "Email and password required" }); return; }
+    const dbUser: any = memoryUsers.find((u: any) => u.email?.toLowerCase() === email?.toLowerCase());
+    if (!dbUser) { res.status(401).json({ error: "User not found" }); return; }
+    let match = false;
+    try { match = await bcrypt.compare(password, dbUser.password); } catch (e: any) { res.status(500).json({ error: "bcrypt error: " + e.message }); return; }
+    if (!match) { res.status(401).json({ error: "Invalid password" }); return; }
+    const token = jwt.sign({ id: dbUser.id, email, role: dbUser.role, fullName: dbUser.fullName }, JWT_SECRET, { expiresIn: "6h" });
+    res.json({ message: "Login ok", user: { ...mapUserToFrontend(dbUser), token } });
+  } catch (err: any) { res.status(500).json({ error: "Login error: " + err.message }); }
 });
 
 // Users
