@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 
+console.log("[api/index.ts] Starting initialization...");
+
 const app = express();
 const PORT = 3000;
 
@@ -2204,7 +2206,15 @@ Constraints:
 });
 
 // ==========================================
-// VITE MIDDLEWARE & STANDALONE INGRESS BINDINGS
+// GLOBAL ERROR HANDLER
 // ==========================================
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Unhandled error:", err?.message || err);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err?.message || "Unknown error",
+    stack: process.env.NODE_ENV !== "production" ? err?.stack : undefined,
+  });
+});
 
 export default app;
