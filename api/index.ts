@@ -1,8 +1,13 @@
 import express from "express";
 import cors from "cors";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
+import { runDatabaseSetup } from "./dbSetup";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || "cardmri_jwt_secret_2026";
 
 app.use(cors({
   origin: (origin: any, callback: any) => {
@@ -28,8 +33,15 @@ app.use(cors({
 app.use(express.json({ limit: "500kb" }));
 app.use(express.urlencoded({ extended: true, limit: "500kb" }));
 
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || supabaseAnonKey;
+const sbClient = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = sbClient;
+const sbAdminClient = createClient(supabaseUrl, supabaseServiceKey);
+
 app.get("/api/health", (_req: any, res: any) => {
-  res.json({ status: "ok", timestamp: Date.now() });
+  res.json({ status: "ok", timestamp: Date.now(), env: { supabaseUrl: !!supabaseUrl } });
 });
 
 app.use((err: any, _req: any, res: any, _next: any) => {
