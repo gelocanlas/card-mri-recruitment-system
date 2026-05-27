@@ -1,10 +1,35 @@
 ﻿import express from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 process.on("unhandledRejection", (reason) => { console.error("UNHANDLED REJECTION:", reason); });
+
+function persistPath(): string {
+  return path.join(process.cwd(), "api", ".data.json");
+}
+
+let persistedData: Record<string, any> = {};
+function loadPersistedData(): Record<string, any> {
+  try {
+    const p = persistPath();
+    if (fs.existsSync(p)) {
+      persistedData = JSON.parse(fs.readFileSync(p, "utf8"));
+      return persistedData;
+    }
+  } catch (e: any) { console.warn("Persist load:", e.message); }
+  return {};
+}
+function savePersistedData(key: string, value: any) {
+  persistedData[key] = value;
+  try {
+    fs.writeFileSync(persistPath(), JSON.stringify(persistedData, null, 2), "utf8");
+  } catch (e: any) { console.warn("Persist save:", e.message); }
+}
+loadPersistedData();
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "cardmri_jwt_secret_2026";
@@ -93,59 +118,72 @@ async function writeLog(actor: string, op: string, details: string) {
 }
 
 // ============ IN-MEMORY SEEDED DATA ============
-const memoryUsers: any[] = [
-  { id: "user-1", email: "michealangelo.canlas@cardmri.com", fullName: "Admin", password: "$2b$12$IYYqhTEY5VEssLh2w0qVgOi.yFSfxu6V6TeTnGqSmFwRCnoPLGjkW", role: "it_admin", title: "IT Administrator", phone: "+63 918 100 2000" }
-];
+function seededUsers(): any[] {
+  return [
+    { id: "user-1", email: "michealangelo.canlas@cardmri.com", fullName: "Admin", password: "$2a$12$gr8Wl9mPlZDEPt6gCGIrIOs7jQwoVyAIkGSeTFENM2nzDS4xgdQqK", role: "it_admin", title: "IT Administrator", phone: "+63 918 100 2000" }
+  ];
+}
+function seededJobs(): any[] {
+  return [
+    { id: "job-bmf-001", title: "Branch Microfinance Officer", department: "Branch Operations", institution: "CARD Bank, Inc.", location: "San Pablo City, Laguna", description: "Responsible for loan evaluations, conducting interviews, client orientations, and facilitating field disbursements.", requirements: ["Graduate of any 4-year Bachelor's Degree", "Willing to travel and do field work", "Strong communication skills", "Values integrity and has a heart for poverty eradication"], type: "Full-time", is_active: true, created_at: new Date("2026-01-15").toISOString() },
+    { id: "job-fin-001", title: "Accountant / Finance Specialist", department: "Finance Center", institution: "CARD SME Bank, Inc.", location: "Lucena City, Quezon", description: "Handles bank reconciliation, monitors cash flow, ensures local tax compliance.", requirements: ["BS Accountancy Graduate", "At least 1-2 years experience in finance", "Highly meticulous and accurate", "Proficient in accounting software"], type: "Full-time", is_active: true, created_at: new Date("2026-02-01").toISOString() },
+    { id: "job-it-001", title: "IT Support & System Specialist", department: "Information Technology Unit", institution: "CARD MRI IT Mutual Benefit Association", location: "Bay, Laguna", description: "Maintains network firewalls, handles hardware setups, supports digital apps.", requirements: ["BS Information Technology or Computer Science", "Knowledge in Linux or network subnetting", "Willing to offer tech support on field", "Good communication and problem-solving skills"], type: "Full-time", is_active: true, created_at: new Date("2026-03-10").toISOString() },
+    { id: "job-hr-001", title: "Recruitment Coordinator & HR Generalist", department: "Human Resource Development", institution: "CARD Mutually Reinforcing Institutions", location: "San Pablo City, Laguna", description: "Aids in resume sorting, manages applicant files, coordinates evaluations.", requirements: ["BS Psychology or Human Resource", "Excellent organization abilities", "Interest in digitized workflows", "Outstanding communication skills"], type: "Full-time", is_active: true, created_at: new Date("2026-04-05").toISOString() }
+  ];
+}
+function seededScreeningQuestions(): any[] {
+  return [
+    { id: "q-1", text: "Where did you hear about this career opportunity?", type: "select", options: ["Social Media", "School Job Fair", "Employee Referral", "Newspaper/Flyer", "Walk-in"], required: true, isActive: true, sort_order: 1 },
+    { id: "q-2", text: "Are you willing to be assigned to any branch or field office matching CARD MRI priorities?", type: "boolean", options: [], required: true, isActive: true, sort_order: 2 },
+    { id: "q-3", text: "Are you related to any active employee of CARD MRI entities up to the third degree of consanguinity or affinity?", type: "boolean", options: [], required: true, isActive: true, sort_order: 3 },
+    { id: "q-4", text: "Do you have experience in field-based operations, collection, or community service work?", type: "boolean", options: [], required: true, isActive: true, sort_order: 4 }
+  ];
+}
+function seededHomepageSettings(): any {
+  return {
+    id: 1,
+    badgeText: "Empowering Countrysides via Intelligent Recruitment",
+    title: "Build Your Career, Transform Filipino Lives",
+    description: "Become part of the CARD Mutually Reinforcing Institutions legacy.",
+    emergencyContacts: [
+      { id: "1", label: "CARD MRI Central Office", value: "20 M. L. Quezon St., City of San Pablo, Laguna" },
+      { id: "2", label: "HRD Hotlines", value: "+63 (2) 584-3333 ext 403" },
+      { id: "3", label: "Digital Helpline Email", value: "mri_recruitment@cardmri.com" }
+    ],
+    branchesCount: "200+",
+    yearsOfService: "35+",
+    filipinosEmpowered: "5M+",
+    heroImageUrl: ""
+  };
+}
+function seededAboutSettings(): any {
+  return {
+    id: 1,
+    missionText: "To provide responsive banking and financial services to the marginalized sectors of society.",
+    visionText: "A nation where rural families are empowered through accessible financial services.",
+    contactAddress: "20 M. L. Quezon St., City of San Pablo, Laguna, Philippines",
+    contactPhone: "+63 (2) 584-3333 extension line 403",
+    contactEmail: "mri_recruitment@cardmri.com",
+    moralCompassValues: [],
+    legacyTimeline: [],
+    institutionBranches: []
+  };
+}
+function seededSystemSettings(): Record<string, any[]> {
+  return {
+    statuses_list: ["New", "Acknowledge", "Passed Screening", "Already Endorsed", "Hired", "Rejected", "Rejected (With Relatives)"],
+    institutions_list: ["CARD Bank", "CARD SME Bank", "CARD MBA", "CARD MRI IT", "CARD NGO", "CARD Pioneer", "CARD Leasing", "CARD Livelihood", "HR Department", "Finance Center", "IT Admin Unit", "Branch Operations"],
+    hr_incharges_list: ["Ms. Ailen Entero", "Ms. Mary Jane Romero", "Mr. Edmon Bazar", "Ms. Sarah Balazo", "Ms. Christine Ramos", "Mr. Juan Dela Cruz", "Ms. Maria Santos", "Mr. Robert Lim"]
+  };
+}
 
-const memoryJobs: any[] = [
-  { id: "job-bmf-001", title: "Branch Microfinance Officer", department: "Branch Operations", institution: "CARD Bank, Inc.", location: "San Pablo City, Laguna", description: "Responsible for loan evaluations, conducting interviews, client orientations, and facilitating field disbursements.", requirements: ["Graduate of any 4-year Bachelor's Degree", "Willing to travel and do field work", "Strong communication skills", "Values integrity and has a heart for poverty eradication"], type: "Full-time", is_active: true, created_at: new Date().toISOString() },
-  { id: "job-fin-001", title: "Accountant / Finance Specialist", department: "Finance Center", institution: "CARD SME Bank, Inc.", location: "Lucena City, Quezon", description: "Handles bank reconciliation, monitors cash flow, ensures local tax compliance.", requirements: ["BS Accountancy Graduate", "At least 1-2 years experience in finance", "Highly meticulous and accurate", "Proficient in accounting software"], type: "Full-time", is_active: true, created_at: new Date().toISOString() },
-  { id: "job-it-001", title: "IT Support & System Specialist", department: "Information Technology Unit", institution: "CARD MRI IT Mutual Benefit Association", location: "Bay, Laguna", description: "Maintains network firewalls, handles hardware setups, supports digital apps.", requirements: ["BS Information Technology or Computer Science", "Knowledge in Linux or network subnetting", "Willing to offer tech support on field", "Good communication and problem-solving skills"], type: "Full-time", is_active: true, created_at: new Date().toISOString() },
-  { id: "job-hr-001", title: "Recruitment Coordinator & HR Generalist", department: "Human Resource Development", institution: "CARD Mutually Reinforcing Institutions", location: "San Pablo City, Laguna", description: "Aids in resume sorting, manages applicant files, coordinates evaluations.", requirements: ["BS Psychology or Human Resource", "Excellent organization abilities", "Interest in digitized workflows", "Outstanding communication skills"], type: "Full-time", is_active: true, created_at: new Date().toISOString() }
-];
-
-const memoryApplications: any[] = [];
-
-const memoryScreeningQuestions: any[] = [
-  { id: "q-1", text: "Where did you hear about this career opportunity?", type: "select", options: ["Social Media", "School Job Fair", "Employee Referral", "Newspaper/Flyer", "Walk-in"], required: true, isActive: true, sort_order: 1 },
-  { id: "q-2", text: "Are you willing to be assigned to any branch or field office matching CARD MRI priorities?", type: "boolean", options: [], required: true, isActive: true, sort_order: 2 },
-  { id: "q-3", text: "Are you related to any active employee of CARD MRI entities up to the third degree of consanguinity or affinity?", type: "boolean", options: [], required: true, isActive: true, sort_order: 3 },
-  { id: "q-4", text: "Do you have experience in field-based operations, collection, or community service work?", type: "boolean", options: [], required: true, isActive: true, sort_order: 4 }
-];
-
-const memoryHomepageSettings: any = {
-  id: 1,
-  badgeText: "Empowering Countrysides via Intelligent Recruitment",
-  title: "Build Your Career, Transform Filipino Lives",
-  description: "Become part of the CARD Mutually Reinforcing Institutions legacy.",
-  emergencyContacts: [
-    { id: "1", label: "CARD MRI Central Office", value: "20 M. L. Quezon St., City of San Pablo, Laguna" },
-    { id: "2", label: "HRD Hotlines", value: "+63 (2) 584-3333 ext 403" },
-    { id: "3", label: "Digital Helpline Email", value: "mri_recruitment@cardmri.com" }
-  ],
-  branchesCount: "200+",
-  yearsOfService: "35+",
-  filipinosEmpowered: "5M+",
-  heroImageUrl: ""
-};
-
-const memoryAboutSettings: any = {
-  id: 1,
-  missionText: "To provide responsive banking and financial services to the marginalized sectors of society.",
-  visionText: "A nation where rural families are empowered through accessible financial services.",
-  contactAddress: "20 M. L. Quezon St., City of San Pablo, Laguna, Philippines",
-  contactPhone: "+63 (2) 584-3333 extension line 403",
-  contactEmail: "mri_recruitment@cardmri.com",
-  moralCompassValues: [],
-  legacyTimeline: [],
-  institutionBranches: []
-};
-
-const memorySystemSettings: Record<string, any[]> = {
-  statuses_list: ["New", "Acknowledge", "Passed Screening", "Already Endorsed", "Hired", "Rejected", "Rejected (With Relatives)"],
-  institutions_list: ["CARD Bank", "CARD SME Bank", "CARD MBA", "CARD MRI IT", "CARD NGO", "CARD Pioneer", "CARD Leasing", "CARD Livelihood", "HR Department", "Finance Center", "IT Admin Unit", "Branch Operations"],
-  hr_incharges_list: ["Ms. Ailen Entero", "Ms. Mary Jane Romero", "Mr. Edmon Bazar", "Ms. Sarah Balazo", "Ms. Christine Ramos", "Mr. Juan Dela Cruz", "Ms. Maria Santos", "Mr. Robert Lim"]
-};
+const memoryUsers: any[] = persistedData.users || seededUsers();
+const memoryJobs: any[] = persistedData.jobs || seededJobs();
+const memoryApplications: any[] = persistedData.applications || [];
+const memoryScreeningQuestions: any[] = persistedData.screeningQuestions || seededScreeningQuestions();
+const memoryHomepageSettings: any = persistedData.homepageSettings || seededHomepageSettings();
+const memoryAboutSettings: any = persistedData.aboutSettings || seededAboutSettings();
+const memorySystemSettings: Record<string, any[]> = persistedData.systemSettings || seededSystemSettings();
 
 // ============ ROUTES ============
 
@@ -182,6 +220,7 @@ app.post("/api/jobs", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     memoryJobs.push(job);
+    savePersistedData("jobs", memoryJobs);
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Create Job", `Created job: ${job.title}`);
     res.json({ message: "Job created", job: mapJobToFrontend(job) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -208,6 +247,7 @@ app.put("/api/jobs/:id", async (req: any, res: any) => {
     const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
     if (idx !== -1) {
       memoryJobs[idx] = { ...memoryJobs[idx], ...updates };
+      savePersistedData("jobs", memoryJobs);
     }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Update Job", `Updated job: ${req.params.id}`);
     res.json({ message: "Job updated", job: mapJobToFrontend(idx !== -1 ? memoryJobs[idx] : updates) });
@@ -222,7 +262,7 @@ app.delete("/api/jobs/:id", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
-    if (idx !== -1) memoryJobs.splice(idx, 1);
+    if (idx !== -1) { memoryJobs.splice(idx, 1); savePersistedData("jobs", memoryJobs); }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Delete Job", `Deleted job: ${req.params.id}`);
     res.json({ message: "Job deleted" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -283,6 +323,7 @@ app.post("/api/users", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     memoryUsers.push(user);
+    savePersistedData("users", memoryUsers);
     await writeLog(actorName || req.user?.fullName || req.user?.email, "Create User", `Created user: ${user.email}`);
     res.json({ message: "User created", user: mapUserToFrontend(user) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -306,6 +347,7 @@ app.put("/api/users/:id", async (req: any, res: any) => {
     const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
     if (idx !== -1) {
       memoryUsers[idx] = { ...memoryUsers[idx], ...updates };
+      savePersistedData("users", memoryUsers);
     }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Update User", `Updated user: ${req.params.id}`);
     res.json({ message: "User updated", user: mapUserToFrontend(idx !== -1 ? memoryUsers[idx] : updates) });
@@ -321,7 +363,7 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
-    if (idx !== -1) memoryUsers.splice(idx, 1);
+    if (idx !== -1) { memoryUsers.splice(idx, 1); savePersistedData("users", memoryUsers); }
     await writeLog(actorName, "Delete User", `Deleted user: ${req.params.id}`);
     res.json({ message: "User deleted" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -357,6 +399,7 @@ app.post("/api/screening-questions", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     memoryScreeningQuestions.push(q);
+    savePersistedData("screeningQuestions", memoryScreeningQuestions);
     await writeLog(req.user?.fullName || req.user?.email, "Create Question", `Created screening question: ${q.text}`);
     res.json({ message: "Question created", question: q });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -380,6 +423,7 @@ app.put("/api/screening-questions/:id", async (req: any, res: any) => {
     const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
     if (idx !== -1) {
       memoryScreeningQuestions[idx] = { ...memoryScreeningQuestions[idx], ...req.body };
+      savePersistedData("screeningQuestions", memoryScreeningQuestions);
     }
     await writeLog(req.user?.fullName || req.user?.email, "Update Question", `Updated screening question: ${req.params.id}`);
     res.json({ message: "Question updated" });
@@ -394,7 +438,7 @@ app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
-    if (idx !== -1) memoryScreeningQuestions.splice(idx, 1);
+    if (idx !== -1) { memoryScreeningQuestions.splice(idx, 1); savePersistedData("screeningQuestions", memoryScreeningQuestions); }
     await writeLog(req.user?.fullName || req.user?.email, "Delete Question", `Deleted screening question: ${req.params.id}`);
     res.json({ message: "Question deleted" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -445,6 +489,7 @@ app.post("/api/applications", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     memoryApplications.unshift(app);
+    savePersistedData("applications", memoryApplications);
     await writeLog(body.actorName || req.user?.fullName || req.user?.email, "Create Application", `Created application for: ${app.full_name}`);
     res.json({ message: "Application created", application: app });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -479,6 +524,7 @@ app.patch("/api/applications/:id", async (req: any, res: any) => {
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) {
       memoryApplications[idx] = { ...memoryApplications[idx], ...updates };
+      savePersistedData("applications", memoryApplications);
     }
     await writeLog(body.actorName || req.user?.fullName || req.user?.email, "Update Application", `Updated application: ${req.params.id}`);
     res.json({ message: "Application updated" });
@@ -502,6 +548,7 @@ app.patch("/api/applications/:id/status", async (req: any, res: any) => {
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) {
       memoryApplications[idx] = { ...memoryApplications[idx], ...updates };
+      savePersistedData("applications", memoryApplications);
     }
     await writeLog(actorName || req.user?.fullName || req.user?.email, "Status Change", `Changed status for ${req.params.id} to ${status || "updated"}`);
     res.json({ message: "Status updated" });
@@ -517,7 +564,7 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
-    if (idx !== -1) memoryApplications.splice(idx, 1);
+    if (idx !== -1) { memoryApplications.splice(idx, 1); savePersistedData("applications", memoryApplications); }
     await writeLog(actorName, "Delete Application", `Deleted application: ${req.params.id}`);
     res.json({ message: "Application deleted" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -559,6 +606,7 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
       }
     }
     Object.assign(memoryHomepageSettings, body);
+    savePersistedData("homepageSettings", memoryHomepageSettings);
     await writeLog(req.user?.fullName || req.user?.email, "Update Settings", "Updated homepage settings");
     res.json({ message: "Homepage settings updated" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -602,6 +650,7 @@ app.put("/api/about-settings", async (req: any, res: any) => {
       }
     }
     Object.assign(memoryAboutSettings, body);
+    savePersistedData("aboutSettings", memoryAboutSettings);
     await writeLog(req.user?.fullName || req.user?.email, "Update Settings", "Updated about settings");
     res.json({ message: "About settings updated" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -628,6 +677,7 @@ app.put("/api/system-settings/:key", async (req: any, res: any) => {
       if (error) throw new Error(error.message);
     }
     memorySystemSettings[key] = value;
+    savePersistedData("systemSettings", memorySystemSettings);
     await writeLog(req.user?.fullName || req.user?.email, "Update Settings", `Updated system setting: ${key}`);
     res.json({ message: "Setting updated" });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
