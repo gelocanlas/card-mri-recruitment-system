@@ -37,7 +37,7 @@ const loginRateLimiter = function(req: any, res: any, next: any) { console.log("
 
 // In-memory data
 const memoryUsers: any[] = [
-  { id: "user-1", email: "admin@cardmri.com", fullName: "Admin", password: "$2a$12$K1R2TfWlQ2E.8P3u1hSDeOmI6qR9Xm5tU0k9eT3tY2e5e1mSu3G4q", role: "it_admin" }
+  { id: "user-1", email: "michealangelo.canlas@cardmri.com", fullName: "Admin", password: "$2b$12$IYYqhTEY5VEssLh2w0qVgOi.yFSfxu6V6TeTnGqSmFwRCnoPLGjkW", role: "it_admin" }
 ];
 const memoryJobs: any[] = [];
 const memoryApplications: any[] = [];
