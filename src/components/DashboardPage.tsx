@@ -593,82 +593,56 @@ export default function DashboardPage({
       return;
     }
 
-    const supabasePayload = {
+    const selectedJob = jobs.find(j => j.id === manJobId);
+    const payload = {
+      applicant_id: "public-guest-generic",
       full_name: manFullName.trim(),
+      fullName: manFullName.trim(),
+      email: manEmail.trim(),
+      phone: manPhone.trim(),
       age: parseInt(manAge) || 21,
       civil_status: manCivilStatus,
+      civilStatus: manCivilStatus,
       address: manAddress.trim(),
       education_level: manEducation,
+      educationLevel: manEducation,
       course_graduated: manCourseGraduated.trim(),
-      phone: manPhone.trim(),
-      email: manEmail.trim(),
+      courseGraduated: manCourseGraduated.trim(),
+      job_id: manJobId,
+      jobId: manJobId,
+      job_title: selectedJob ? selectedJob.title : "Direct Entry Position",
+      jobTitle: selectedJob ? selectedJob.title : "Direct Entry Position",
+      resume_file_name: "Walkin_Candidate_Ledger.pdf",
+      resumeFileName: "Walkin_Candidate_Ledger.pdf",
+      resume_text: manResumeText.trim() || `Walk-in candidate directly register ledger. Assigned Representative: ${manHrIncharge || "Ms. Ailen Entero"}.`,
+      resumeText: manResumeText.trim() || `Walk-in candidate directly register ledger. Assigned Representative: ${manHrIncharge || "Ms. Ailen Entero"}.`,
+      status: manStatus,
       screening_answers: [],
-      status: manStatus || "New",
-      endorsed_to: manEndorsedTo?.trim() || null,
-      hr_incharge: manHrIncharge?.trim() || null,
-      remarks: manRemarks.trim() || (manJobId ? `Job: ${jobs.find(j => j.id === manJobId)?.title || manJobId}` : null)
+      screeningAnswers: [],
+      endorsed_to: manEndorsedTo || "",
+      endorsedTo: manEndorsedTo || "",
+      hr_incharge: manHrIncharge || "",
+      hrIncharge: manHrIncharge || "",
+      remarks: manRemarks.trim() || "",
+      ai_summary: {
+        summary: manRemarks.trim() || "Walk-in registration compiled by HR Generalist.",
+        skills: ["Walk-in Vetting", "Direct Entry"],
+        education: manEducation,
+        match_score: 100
+      },
+      actorName: currentUser?.fullName || "HR Specialist"
     };
 
     try {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        const { error } = await supabase.from('applicants').insert([ supabasePayload ]);
-        if (error) {
-          console.error("Supabase Manual Entry Error:", error.message);
-          showToast("Supabase Database Error: " + error.message, "error");
-          throw new Error(error.message);
-        }
-      } else {
-        const selectedJob = jobs.find(j => j.id === manJobId);
-        const payload = {
-          applicant_id: "public-guest-generic",
-          full_name: manFullName.trim(),
-          fullName: manFullName.trim(),
-          email: manEmail.trim(),
-          phone: manPhone.trim(),
-          age: parseInt(manAge) || 21,
-          civil_status: manCivilStatus,
-          civilStatus: manCivilStatus,
-          address: manAddress.trim(),
-          education_level: manEducation,
-          educationLevel: manEducation,
-          course_graduated: manCourseGraduated.trim(),
-          courseGraduated: manCourseGraduated.trim(),
-          job_id: manJobId,
-          jobId: manJobId,
-          job_title: selectedJob ? selectedJob.title : "Direct Entry Position",
-          jobTitle: selectedJob ? selectedJob.title : "Direct Entry Position",
-          resume_file_name: "Walkin_Candidate_Ledger.pdf",
-          resumeFileName: "Walkin_Candidate_Ledger.pdf",
-          resume_text: manResumeText.trim() || `Walk-in candidate directly register ledger. Assigned Representative: ${manHrIncharge || "Ms. Ailen Entero"}.`,
-          resumeText: manResumeText.trim() || `Walk-in candidate directly register ledger. Assigned Representative: ${manHrIncharge || "Ms. Ailen Entero"}.`,
-          status: manStatus,
-          screening_answers: [],
-          screeningAnswers: [],
-          endorsed_to: manEndorsedTo || "",
-          endorsedTo: manEndorsedTo || "",
-          hr_incharge: manHrIncharge || "",
-          hrIncharge: manHrIncharge || "",
-          remarks: manRemarks.trim() || "",
-          ai_summary: {
-            summary: manRemarks.trim() || "Walk-in registration compiled by HR Generalist.",
-            skills: ["Walk-in Vetting", "Direct Entry"],
-            education: manEducation,
-            match_score: 100
-          },
-          actorName: currentUser?.fullName || "HR Specialist"
-        };
+      const res = await authFetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
 
-        const res = await authFetch("/api/applications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "System rejected registrant file.");
-        }
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "System rejected registrant file.");
       }
 
       // Success

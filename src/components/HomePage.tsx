@@ -29,7 +29,6 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { UserProfile, JobPosting } from "../types";
 import { authFetch } from "../lib/api";
-import { getSupabaseClient } from "../lib/supabase";
 import { useToast } from "./ToastContext";
 import ApplicantViewer from "./ApplicantViewer";
 
@@ -331,57 +330,31 @@ export default function HomePage({ setActiveTab, currentUser, jobs, onRefreshJob
       a.questionId === "q-2"
     )?.answer || null;
 
-    const supabasePayload = {
-      full_name: screenFullName.trim(),
-      age: parseInt(screenAge, 10) || 18,
-      civil_status: screenCivilStatus,
-      address: screenAddress.trim(),
-      education_level: screenEducationLevel,
-      phone: screenContactNumber.trim(),
-      email: screenEmail.trim(),
-      course_graduated: screenCourseGraduated.trim(),
-      screening_answers: answersPayload,
-      status: "New",
-      remarks: "Self-registered screening questionnaire successfully."
-    };
-
     try {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        const { error } = await supabase.from('applicants').insert([ supabasePayload ]);
-        if (error) {
-          console.error("Supabase Submission Error:", error.message);
-          showToast("Database Error: " + error.message, "error");
-          throw new Error(error.message);
-        }
-      } else {
-        // Fallback payload matching old structure
-        const payload = {
-          fullName: screenFullName,
-          email: screenEmail,
-          phone: screenContactNumber,
-          job_id: selectedGlimpseJob?.id,
-          jobTitle: selectedGlimpseJob?.title,
-          age: parseInt(screenAge, 10) || 18,
-          civilStatus: screenCivilStatus,
-          address: screenAddress,
-          educationLevel: screenEducationLevel,
-          courseGraduated: screenCourseGraduated.trim(),
-          course_graduated: screenCourseGraduated.trim(),
-          screeningAnswers: answersPayload,
-          remarks: "Self-registered screening questionnaire successfully.",
-          status: "New"
-        };
-        const res = await fetch("/api/applications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      const payload = {
+        fullName: screenFullName,
+        email: screenEmail,
+        phone: screenContactNumber,
+        jobId: selectedGlimpseJob?.id,
+        jobTitle: selectedGlimpseJob?.title,
+        age: parseInt(screenAge, 10) || 18,
+        civilStatus: screenCivilStatus,
+        address: screenAddress,
+        educationLevel: screenEducationLevel,
+        courseGraduated: screenCourseGraduated.trim(),
+        screeningAnswers: answersPayload,
+        remarks: "Self-registered screening questionnaire successfully.",
+        status: "New"
+      };
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to submit screening details due to duplicate entry.");
-        }
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to submit screening details.");
       }
 
       setScreeningStep(3); // Success Step!

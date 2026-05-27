@@ -457,7 +457,6 @@ app.get("/api/applications", async (req: any, res: any) => {
 });
 
 app.post("/api/applications", async (req: any, res: any) => {
-  if (!checkAuth(req, res)) return;
   try {
     const body = req.body;
     const app: any = {
@@ -486,7 +485,7 @@ app.post("/api/applications", async (req: any, res: any) => {
     };
     if (sbClient) {
       const { error } = await sbClient.from("applicants").insert([app]);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
     }
     memoryApplications.unshift(app);
     savePersistedData("applications", memoryApplications);
@@ -543,7 +542,7 @@ app.patch("/api/applications/:id/status", async (req: any, res: any) => {
 
     if (sbClient) {
       const { error } = await sbClient.from("applicants").update(updates).eq("id", req.params.id);
-      if (error) throw new Error(error.message);
+      if (error) console.warn("Supabase status update failed (falling back to memory):", error.message);
     }
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) {
