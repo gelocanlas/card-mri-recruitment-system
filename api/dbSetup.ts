@@ -211,6 +211,7 @@ export async function runDatabaseSetup(
   // BLOCK 2: ADD MISSING COLUMNS (ALTER TABLE)
   // ═════════════════════════════════════════════
 
+  if (!await runSQL("ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS phone TEXT;", "ALTER applicants add phone")) overallSuccess = false;
   if (!await runSQL("ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS course_graduated TEXT DEFAULT NULL;", "ALTER applicants add course_graduated")) overallSuccess = false;
   if (!await runSQL("ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();", "ALTER applicants add created_at")) overallSuccess = false;
   if (!await runSQL("ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ DEFAULT NOW();", "ALTER applicants add applied_at")) overallSuccess = false;
