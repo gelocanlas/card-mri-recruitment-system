@@ -93,7 +93,7 @@ app.post("/api/auth/login", async (req: any, res: any) => {
 });
 
 app.get("/api/users", async (req: any, res: any) => {
-  if (!checkAuth(req, res)) return;
+  if (!checkAdmin(req, res)) return;
   try {
     let users: any[] = [];
     try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) users = data; } } catch {}
