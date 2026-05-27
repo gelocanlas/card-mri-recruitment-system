@@ -21,17 +21,18 @@ let supabase: any = null;
 try { sbClient = createClient(supabaseUrl || "", supabaseAnonKey || ""); supabase = sbClient; } catch (e: any) { console.warn("Supabase:", e?.message); }
 
 // Auth middleware
-const requireAuth = (req: any, res: any, next: any) => {
+// Auth helpers (NOT middleware — called directly in route handlers)
+function checkAuth(req: any, res: any): boolean {
   const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return; }
-  try { req.user = jwt.verify(auth.split(" ")[1], JWT_SECRET); next(); }
-  catch (e: any) { res.status(401).json({ error: "Invalid token", detail: e.message }); }
-};
-const requireAdmin = (req: any, res: any, next: any) => {
-  requireAuth(req, res, () => req.user?.role === "it_admin" ? next() : res.status(403).json({ error: "Forbidden" }));
-};
-
-const loginRateLimiter = function(req: any, res: any, next: any) { console.log("RATE LIMITER CALLED"); next(); };
+  if (!auth || !auth.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return false; }
+  try { req.user = jwt.verify(auth.split(" ")[1], JWT_SECRET); return true; }
+  catch (e: any) { res.status(401).json({ error: "Invalid token", detail: e.message }); return false; }
+}
+function checkAdmin(req: any, res: any): boolean {
+  if (!checkAuth(req, res)) return false;
+  if (req.user?.role !== "it_admin") { res.status(403).json({ error: "Forbidden" }); return false; }
+  return true;
+}
 
 // In-memory data
 const memoryUsers: any[] = [
@@ -69,7 +70,7 @@ app.get("/api/jobs", async (_req: any, res: any) => {
   res.json(memoryJobs.map(mapJobToFrontend));
 });
 
-app.post("/api/auth/login", loginRateLimiter, async (req: any, res: any) => {
+app.post("/api/auth/login", async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) { res.status(400).json({ error: "Email and password required" }); return; }
@@ -91,7 +92,8 @@ app.post("/api/auth/login", loginRateLimiter, async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/users", requireAuth, async (_req: any, res: any) => {
+app.get("/api/users", async (req: any, res: any) => {
+  if (!checkAuth(req, res)) return;
   try {
     let users: any[] = [];
     try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) users = data; } } catch {}
@@ -120,7 +122,8 @@ app.get("/api/system-settings/:key", async (req: any, res: any) => {
   res.json({ value: null });
 });
 
-app.get("/api/applications", requireAuth, async (_req: any, res: any) => {
+app.get("/api/applications", async (req: any, res: any) => {
+  if (!checkAuth(req, res)) return;
   try {
     if (sbClient) {
       const { data, error } = await sbClient.from("applicants").select("*").order("applied_at", { ascending: false });
