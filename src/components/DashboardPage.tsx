@@ -2146,6 +2146,18 @@ export default function DashboardPage({
                 </div>
               </div>
 
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Course / Degree Graduated *</label>
+                <input 
+                  type="text" 
+                  required
+                  value={manCourseGraduated}
+                  onChange={e => setManCourseGraduated(e.target.value)}
+                  placeholder="e.g. BS in Business Administration major in Financial Management"
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 font-medium"
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border-t pt-3 border-slate-100">
                 <div className="space-y-1 text-left">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Applying Vacancy Slot *</label>
