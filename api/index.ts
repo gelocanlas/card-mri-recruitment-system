@@ -7,8 +7,21 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 
 console.log("[api/index.ts] Starting initialization...");
+console.log("[api/index.ts] Env check:", JSON.stringify({
+  SUPABASE_URL: !!process.env.SUPABASE_URL,
+  SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+  JWT_SECRET: !!process.env.JWT_SECRET,
+  GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+  NODE_ENV: process.env.NODE_ENV,
+  VERCEL: process.env.VERCEL,
+}));
 
 const app = express();
+
+// Quick health check at the top
+app.get("/api/health", (_req: any, res: any) => {
+  res.json({ status: "ok", timestamp: Date.now() });
+});
 const PORT = 3000;
 
 // Security JWT Token Signing parameters
