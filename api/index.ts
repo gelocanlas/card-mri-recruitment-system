@@ -120,7 +120,7 @@ async function writeLog(actor: string, op: string, details: string) {
 // ============ IN-MEMORY SEEDED DATA ============
 function seededUsers(): any[] {
   return [
-    { id: "user-1", email: "michealangelo.canlas@cardmri.com", fullName: "Admin", password: "$2a$12$gr8Wl9mPlZDEPt6gCGIrIOs7jQwoVyAIkGSeTFENM2nzDS4xgdQqK", role: "it_admin", title: "IT Administrator", phone: "+63 918 100 2000" }
+    { id: "user-1", email: "michealangelo.canlas@cardmri.com", fullName: "Admin", password: "$2a$12$9SBtmC4Q/JndJzLbxF6UsOp5heVkH0jMu3dzBtMTuFRGK8wKtykd2", role: "it_admin", title: "IT Administrator", phone: "+63 918 100 2000" }
   ];
 }
 function seededJobs(): any[] {
