@@ -232,8 +232,15 @@ app.get("/api/debug/db", async (_req: any, res: any) => {
 
 function mergeMemory(dbItems: any[], memItems: any[]): any[] {
   const memById: Record<string, any> = {};
-  for (const m of memItems) memById[m.id] = m;
-  const result: any[] = dbItems.map(d => memById[d.id] ? (delete memById[d.id], memById[d.id]) : d);
+  for (const m of memItems) if (m) memById[m.id] = m;
+  const result: any[] = dbItems.map(d => {
+    if (d && memById[d.id]) {
+      const m = memById[d.id];
+      delete memById[d.id];
+      return m;
+    }
+    return d;
+  });
   for (const id of Object.keys(memById)) result.push(memById[id]);
   return result;
 }
