@@ -199,7 +199,14 @@ const memorySystemSettings: Record<string, any[]> = persistedData.systemSettings
 app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
 app.get("/api/debug/db", async (_req: any, res: any) => {
-  const info: any = { hasUrl: !!process.env.DATABASE_URL, poolExists: !!pgPool, urlPrefix: (process.env.DATABASE_URL || "").slice(0, 20), tests: {} };
+  const raw = process.env.DATABASE_URL || "";
+  const info: any = { hasUrl: !!raw, poolExists: !!pgPool, user: "", dbName: "", pwdLen: 0, tests: {} };
+  try {
+    const u = new URL(raw);
+    info.user = u.username;
+    info.dbName = u.pathname.replace(/^\//, '');
+    info.pwdLen = u.password.length;
+  } catch {}
   try {
     if (!pgPool) { info.tests.ping = "no pool"; }
     else {
