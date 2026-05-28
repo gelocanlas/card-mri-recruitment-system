@@ -2,7 +2,7 @@
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import { createClient } from "@supabase/supabase-js";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -38,12 +38,29 @@ app.use(cors({ origin: (_o: any, cb: any) => cb(null, true), credentials: true }
 app.use(express.json({ limit: "500kb" }));
 app.use(express.urlencoded({ extended: true, limit: "500kb" }));
 
-// Supabase client (wrapped)
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
-let sbClient: any = null;
-let supabase: any = null;
-try { sbClient = createClient(supabaseUrl || "", supabaseAnonKey || ""); supabase = sbClient; } catch (e: any) { console.warn("Supabase:", e?.message); }
+// PostgreSQL connection via Aiven
+const DATABASE_URL = process.env.DATABASE_URL || "";
+let pgPool: any = null;
+try { if (DATABASE_URL) pgPool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } }); } catch (e: any) { console.warn("PG Pool:", e?.message); }
+
+async function query(sql: string, params?: any[]): Promise<any[]> {
+  if (!pgPool) return [];
+  try { const r = await pgPool.query(sql, params); return r.rows; } catch (e: any) { console.warn("PG query:", e.message); return []; }
+}
+async function queryOne(sql: string, params?: any[]): Promise<any> {
+  const rows = await query(sql, params);
+  return rows.length > 0 ? rows[0] : null;
+}
+async function execute(sql: string, params?: any[]): Promise<boolean> {
+  if (!pgPool) return false;
+  try { await pgPool.query(sql, params); return true; } catch (e: any) { console.warn("PG execute:", e.message); return false; }
+}
+
+function toJson(val: any): any {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "string") try { return JSON.parse(val); } catch { return val; }
+  return val;
+}
 
 // Auth helpers
 function checkAuth(req: any, res: any): boolean {
@@ -58,28 +75,6 @@ function checkAdmin(req: any, res: any): boolean {
   return true;
 }
 
-// ============ HELPER: Key conversion ============
-function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-}
-function snakeToCamel(str: string): string {
-  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-}
-function mapKeys(obj: any, convert: (s: string) => string): any {
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) return obj.map((item) => mapKeys(item, convert));
-  if (typeof obj === "object") {
-    const result: any = {};
-    for (const key of Object.keys(obj)) {
-      result[convert(key)] = mapKeys(obj[key], convert);
-    }
-    return result;
-  }
-  return obj;
-}
-
-function sanitizeString(str: any): string { return typeof str === "string" ? str : ""; }
-
 function mapJobToFrontend(j: any) {
   if (!j) return j;
   return {
@@ -89,9 +84,9 @@ function mapJobToFrontend(j: any) {
     institution: j.institution,
     location: j.location,
     description: j.description,
-    requirements: Array.isArray(j.requirements) ? j.requirements : (typeof j.requirements === "string" ? JSON.parse(j.requirements) : []),
+    requirements: toJson(j.requirements),
     type: j.type,
-    isActive: j.is_active !== undefined ? j.is_active : (j.isactive !== undefined ? j.isactive : true),
+    isActive: j.is_active !== undefined ? j.is_active : true,
     createdAt: j.created_at || j.createdAt,
     imageUrl: j.image_url || j.imageUrl
   };
@@ -112,9 +107,11 @@ function mapUserToFrontend(u: any) {
 const memorySystemLogs: any[] = [];
 
 async function writeLog(actor: string, op: string, details: string) {
-  const entry = { id: `log-${Date.now()}`, actor, operation: op, details, timestamp: new Date().toISOString() };
+  const id = `log-${Date.now()}`;
+  const ts = new Date().toISOString();
+  const entry = { id, actor, operation: op, details, timestamp: ts };
   memorySystemLogs.unshift(entry);
-  try { if (sbClient) await sbClient.from("system_logs").insert([entry]); } catch {}
+  await execute("INSERT INTO public.system_logs (id, actor, operation, details, timestamp) VALUES ($1,$2,$3,$4,$5)", [id, actor, op, details, ts]);
 }
 
 // ============ IN-MEMORY SEEDED DATA ============
@@ -189,13 +186,18 @@ const memorySystemSettings: Record<string, any[]> = persistedData.systemSettings
 
 app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
+function mergeMemory(dbItems: any[], memItems: any[]): any[] {
+  const memById: Record<string, any> = {};
+  for (const m of memItems) memById[m.id] = m;
+  const result: any[] = dbItems.map(d => memById[d.id] ? (delete memById[d.id], memById[d.id]) : d);
+  for (const id of Object.keys(memById)) result.push(memById[id]);
+  return result;
+}
+
 // ---------- JOBS ----------
 app.get("/api/jobs", async (_req: any, res: any) => {
-  let dbJobs: any[] = [];
-  try { if (sbClient) { const { data, error } = await sbClient.from("jobs").select("*").order("created_at", { ascending: false }); if (!error && data) dbJobs = data; } } catch {}
-  const seen = new Set(dbJobs.map((j: any) => j.id));
-  for (const mem of memoryJobs) { if (!seen.has(mem.id)) { dbJobs.push(mem); } }
-  res.json(dbJobs.map(mapJobToFrontend));
+  const dbJobs = await query("SELECT * FROM public.jobs ORDER BY created_at DESC");
+  res.json(mergeMemory(dbJobs, memoryJobs).map(mapJobToFrontend));
 });
 
 app.post("/api/jobs", async (req: any, res: any) => {
@@ -213,10 +215,10 @@ app.post("/api/jobs", async (req: any, res: any) => {
       is_active: req.body.isActive !== undefined ? req.body.isActive : true,
       created_at: new Date().toISOString()
     };
-    if (sbClient) {
-      const { error } = await sbClient.from("jobs").insert([job]);
-      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
-    }
+    await execute(
+      "INSERT INTO public.jobs (id,title,department,institution,location,description,requirements,type,is_active,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)",
+      [job.id, job.title, job.department, job.institution, job.location, job.description, JSON.stringify(job.requirements), job.type, job.is_active, job.created_at]
+    );
     memoryJobs.push(job);
     savePersistedData("jobs", memoryJobs);
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Create Job", `Created job: ${job.title}`);
@@ -233,32 +235,36 @@ app.put("/api/jobs/:id", async (req: any, res: any) => {
     if (req.body.institution !== undefined) updates.institution = req.body.institution;
     if (req.body.location !== undefined) updates.location = req.body.location;
     if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.requirements !== undefined) updates.requirements = req.body.requirements;
+    if (req.body.requirements !== undefined) updates.requirements = JSON.stringify(req.body.requirements);
     if (req.body.type !== undefined) updates.type = req.body.type;
     if (req.body.isActive !== undefined) updates.is_active = req.body.isActive;
     updates.updated_at = new Date().toISOString();
 
-    if (sbClient) {
-      const { error } = await sbClient.from("jobs").update(updates).eq("id", req.params.id);
-      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    for (const [k, v] of Object.entries(updates)) {
+      setClauses.push(`${k} = $${idx++}`);
+      vals.push(v);
     }
-    const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
-    if (idx !== -1) {
-      memoryJobs[idx] = { ...memoryJobs[idx], ...updates };
+    if (setClauses.length > 0) {
+      vals.push(req.params.id);
+      await execute(`UPDATE public.jobs SET ${setClauses.join(", ")} WHERE id = $${idx}`, vals);
+    }
+    const memIdx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
+    if (memIdx !== -1) {
+      memoryJobs[memIdx] = { ...memoryJobs[memIdx], ...updates };
       savePersistedData("jobs", memoryJobs);
     }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Update Job", `Updated job: ${req.params.id}`);
-    res.json({ message: "Job updated", job: mapJobToFrontend(idx !== -1 ? memoryJobs[idx] : updates) });
+    res.json({ message: "Job updated", job: mapJobToFrontend(memIdx !== -1 ? memoryJobs[memIdx] : updates) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete("/api/jobs/:id", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
   try {
-    if (sbClient) {
-      const { error } = await sbClient.from("jobs").delete().eq("id", req.params.id);
-      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
-    }
+    await execute("DELETE FROM public.jobs WHERE id = $1", [req.params.id]);
     const idx = memoryJobs.findIndex((j: any) => j.id === req.params.id);
     if (idx !== -1) { memoryJobs.splice(idx, 1); savePersistedData("jobs", memoryJobs); }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Delete Job", `Deleted job: ${req.params.id}`);
@@ -271,13 +277,7 @@ app.post("/api/auth/login", async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) { res.status(400).json({ error: "Email and password required" }); return; }
-    let dbUser: any = null;
-    try {
-      if (sbClient) {
-        const { data } = await sbClient.from("users").select("*").ilike("email", email.toLowerCase()).maybeSingle();
-        if (data) dbUser = data;
-      }
-    } catch {}
+    let dbUser: any = await queryOne("SELECT * FROM public.users WHERE LOWER(email) = LOWER($1)", [email]);
     if (!dbUser) dbUser = memoryUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
     if (!dbUser) { res.status(401).json({ error: "User not found" }); return; }
     let match = false;
@@ -293,11 +293,8 @@ app.post("/api/auth/login", async (req: any, res: any) => {
 app.get("/api/users", async (req: any, res: any) => {
   if (!checkAdmin(req, res)) return;
   try {
-    let dbUsers: any[] = [];
-    try { if (sbClient) { const { data } = await sbClient.from("users").select("*"); if (data) dbUsers = data; } } catch {}
-    const seen = new Set(dbUsers.map((u: any) => u.id));
-    for (const mem of memoryUsers) { if (!seen.has(mem.id)) { dbUsers.push(mem); } }
-    res.json(dbUsers.map(mapUserToFrontend));
+    const dbUsers = await query("SELECT * FROM public.users");
+    res.json(mergeMemory(dbUsers, memoryUsers).map(mapUserToFrontend));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -317,10 +314,10 @@ app.post("/api/users", async (req: any, res: any) => {
       password: hashed,
       createdAt: new Date().toISOString()
     };
-    if (sbClient) {
-      const { error } = await sbClient.from("users").insert([user]);
-      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
-    }
+    await execute(
+      "INSERT INTO public.users (id,email,\"fullName\",phone,role,title,password,\"createdAt\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [user.id, user.email, user.fullName, user.phone, user.role, user.title, user.password, user.createdAt]
+    );
     memoryUsers.push(user);
     savePersistedData("users", memoryUsers);
     await writeLog(actorName || req.user?.fullName || req.user?.email, "Create User", `Created user: ${user.email}`);
@@ -339,17 +336,24 @@ app.put("/api/users/:id", async (req: any, res: any) => {
     if (req.body.title !== undefined) updates.title = req.body.title;
     if (req.body.password) updates.password = await bcrypt.hash(req.body.password, 12);
 
-    if (sbClient) {
-      const { error } = await sbClient.from("users").update(updates).eq("id", req.params.id);
-      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    for (const [k, v] of Object.entries(updates)) {
+      setClauses.push(`"${k}" = $${idx++}`);
+      vals.push(v);
     }
-    const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
-    if (idx !== -1) {
-      memoryUsers[idx] = { ...memoryUsers[idx], ...updates };
+    if (setClauses.length > 0) {
+      vals.push(req.params.id);
+      await execute(`UPDATE public.users SET ${setClauses.join(", ")} WHERE id = $${idx}`, vals);
+    }
+    const memIdx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
+    if (memIdx !== -1) {
+      memoryUsers[memIdx] = { ...memoryUsers[memIdx], ...updates };
       savePersistedData("users", memoryUsers);
     }
     await writeLog(req.body.actorName || req.user?.fullName || req.user?.email, "Update User", `Updated user: ${req.params.id}`);
-    res.json({ message: "User updated", user: mapUserToFrontend(idx !== -1 ? memoryUsers[idx] : updates) });
+    res.json({ message: "User updated", user: mapUserToFrontend(memIdx !== -1 ? memoryUsers[memIdx] : updates) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -357,10 +361,7 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
   if (!checkAdmin(req, res)) return;
   try {
     const actorName = req.query.actorName || req.body?.actorName || req.user?.fullName || req.user?.email;
-    if (sbClient) {
-      const { error } = await sbClient.from("users").delete().eq("id", req.params.id);
-      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
-    }
+    await execute("DELETE FROM public.users WHERE id = $1", [req.params.id]);
     const idx = memoryUsers.findIndex((u: any) => u.id === req.params.id);
     if (idx !== -1) { memoryUsers.splice(idx, 1); savePersistedData("users", memoryUsers); }
     await writeLog(actorName, "Delete User", `Deleted user: ${req.params.id}`);
@@ -370,11 +371,8 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
 
 // ---------- SCREENING QUESTIONS ----------
 app.get("/api/screening-questions", async (_req: any, res: any) => {
-  let dbQuestions: any[] = [];
-  try { if (sbClient) { const { data, error } = await sbClient.from("screening_questions").select("*").order("sort_order"); if (!error && data) dbQuestions = data; } } catch {}
-  const seen = new Set(dbQuestions.map((q: any) => q.id));
-  for (const mem of memoryScreeningQuestions) { if (!seen.has(mem.id)) { dbQuestions.push(mem); } }
-  res.json(dbQuestions);
+  const dbQuestions = await query("SELECT * FROM public.screening_questions ORDER BY sort_order");
+  res.json(mergeMemory(dbQuestions, memoryScreeningQuestions));
 });
 
 app.post("/api/screening-questions", async (req: any, res: any) => {
@@ -389,12 +387,10 @@ app.post("/api/screening-questions", async (req: any, res: any) => {
       isActive: req.body.isActive !== undefined ? req.body.isActive : true,
       sort_order: req.body.sort_order || 0
     };
-    if (sbClient) {
-      const dbPayload = { ...q, is_active: q.isActive, sort_order: q.sort_order };
-      delete (dbPayload as any).isActive;
-      const { error } = await sbClient.from("screening_questions").insert([dbPayload]);
-      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
-    }
+    await execute(
+      "INSERT INTO public.screening_questions (id,text,type,options,required,is_active,sort_order) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)",
+      [q.id, q.text, q.type, JSON.stringify(q.options), q.required, q.isActive, q.sort_order]
+    );
     memoryScreeningQuestions.push(q);
     savePersistedData("screeningQuestions", memoryScreeningQuestions);
     await writeLog(req.user?.fullName || req.user?.email, "Create Question", `Created screening question: ${q.text}`);
@@ -408,18 +404,25 @@ app.put("/api/screening-questions/:id", async (req: any, res: any) => {
     const updates: any = {};
     if (req.body.text !== undefined) updates.text = req.body.text;
     if (req.body.type !== undefined) updates.type = req.body.type;
-    if (req.body.options !== undefined) updates.options = req.body.options;
+    if (req.body.options !== undefined) updates.options = JSON.stringify(req.body.options);
     if (req.body.required !== undefined) updates.required = req.body.required;
     if (req.body.isActive !== undefined) updates.is_active = req.body.isActive;
     if (req.body.sort_order !== undefined) updates.sort_order = req.body.sort_order;
 
-    if (sbClient) {
-      const { error } = await sbClient.from("screening_questions").update(updates).eq("id", req.params.id);
-      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    for (const [k, v] of Object.entries(updates)) {
+      setClauses.push(`${k} = $${idx++}`);
+      vals.push(v);
     }
-    const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
-    if (idx !== -1) {
-      memoryScreeningQuestions[idx] = { ...memoryScreeningQuestions[idx], ...req.body };
+    if (setClauses.length > 0) {
+      vals.push(req.params.id);
+      await execute(`UPDATE public.screening_questions SET ${setClauses.join(", ")} WHERE id = $${idx}`, vals);
+    }
+    const memIdx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
+    if (memIdx !== -1) {
+      memoryScreeningQuestions[memIdx] = { ...memoryScreeningQuestions[memIdx], ...req.body };
       savePersistedData("screeningQuestions", memoryScreeningQuestions);
     }
     await writeLog(req.user?.fullName || req.user?.email, "Update Question", `Updated screening question: ${req.params.id}`);
@@ -430,10 +433,7 @@ app.put("/api/screening-questions/:id", async (req: any, res: any) => {
 app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
   try {
-    if (sbClient) {
-      const { error } = await sbClient.from("screening_questions").delete().eq("id", req.params.id);
-      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
-    }
+    await execute("DELETE FROM public.screening_questions WHERE id = $1", [req.params.id]);
     const idx = memoryScreeningQuestions.findIndex((q: any) => q.id === req.params.id);
     if (idx !== -1) { memoryScreeningQuestions.splice(idx, 1); savePersistedData("screeningQuestions", memoryScreeningQuestions); }
     await writeLog(req.user?.fullName || req.user?.email, "Delete Question", `Deleted screening question: ${req.params.id}`);
@@ -444,23 +444,10 @@ app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
 // ---------- APPLICATIONS ----------
 app.get("/api/applications", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
-  let dbApps: any[] = [];
-  try {
-    if (sbClient) {
-      const { data, error } = await sbClient.from("applicants").select("*").order("created_at", { ascending: false });
-      if (!error && data) dbApps = data;
-    }
-  } catch {}
-  const seen = new Set(dbApps.map((a: any) => a.id));
-  for (const mem of memoryApplications) {
-    if (!seen.has(mem.id)) {
-      dbApps.push(mem);
-    }
-  }
-  res.json(dbApps);
+  const dbApps = await query("SELECT * FROM public.applicants ORDER BY created_at DESC");
+  res.json(mergeMemory(dbApps, memoryApplications));
 });
 
-// Returns only in-memory applications (for frontend supplement)
 app.get("/api/api-only-applications", (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
   res.json(memoryApplications);
@@ -493,10 +480,10 @@ app.post("/api/applications", async (req: any, res: any) => {
       applied_at: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
-    if (sbClient) {
-      const { error } = await sbClient.from("applicants").insert([app]);
-      if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
-    }
+    await execute(
+      "INSERT INTO public.applicants (id,applicant_id,full_name,email,phone,job_id,job_title,resume_file_name,resume_text,status,age,civil_status,address,education_level,course_graduated,screening_answers,endorsed_to,hr_incharge,remarks,ai_summary,applied_at,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18,$19,$20::jsonb,$21,$22)",
+      [app.id, app.applicant_id, app.full_name, app.email, app.phone, app.job_id, app.job_title, app.resume_file_name, app.resume_text, app.status, app.age, app.civil_status, app.address, app.education_level, app.course_graduated, JSON.stringify(app.screening_answers), app.endorsed_to, app.hr_incharge, app.remarks, JSON.stringify(app.ai_summary), app.applied_at, app.created_at]
+    );
     memoryApplications.unshift(app);
     savePersistedData("applications", memoryApplications);
     await writeLog(body.actorName || req.user?.fullName || req.user?.email, "Create Application", `Created application for: ${app.full_name}`);
@@ -526,13 +513,20 @@ app.patch("/api/applications/:id", async (req: any, res: any) => {
     if (body.resumeText !== undefined) updates.resume_text = body.resumeText;
     if (body.resume_text !== undefined) updates.resume_text = body.resume_text;
 
-    if (sbClient) {
-      const { error } = await sbClient.from("applicants").update(updates).eq("id", req.params.id);
-      if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    for (const [k, v] of Object.entries(updates)) {
+      setClauses.push(`${k} = $${idx++}`);
+      vals.push(v);
     }
-    const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
-    if (idx !== -1) {
-      memoryApplications[idx] = { ...memoryApplications[idx], ...updates };
+    if (setClauses.length > 0) {
+      vals.push(req.params.id);
+      await execute(`UPDATE public.applicants SET ${setClauses.join(", ")} WHERE id = $${idx}`, vals);
+    }
+    const memIdx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
+    if (memIdx !== -1) {
+      memoryApplications[memIdx] = { ...memoryApplications[memIdx], ...updates };
       savePersistedData("applications", memoryApplications);
     }
     await writeLog(body.actorName || req.user?.fullName || req.user?.email, "Update Application", `Updated application: ${req.params.id}`);
@@ -550,13 +544,20 @@ app.patch("/api/applications/:id/status", async (req: any, res: any) => {
     if (hrIncharge !== undefined) updates.hr_incharge = hrIncharge;
     if (remarks !== undefined) updates.remarks = remarks;
 
-    if (sbClient) {
-      const { error } = await sbClient.from("applicants").update(updates).eq("id", req.params.id);
-      if (error) console.warn("Supabase status update failed (falling back to memory):", error.message);
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    for (const [k, v] of Object.entries(updates)) {
+      setClauses.push(`${k} = $${idx++}`);
+      vals.push(v);
     }
-    const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
-    if (idx !== -1) {
-      memoryApplications[idx] = { ...memoryApplications[idx], ...updates };
+    if (setClauses.length > 0) {
+      vals.push(req.params.id);
+      await execute(`UPDATE public.applicants SET ${setClauses.join(", ")} WHERE id = $${idx}`, vals);
+    }
+    const memIdx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
+    if (memIdx !== -1) {
+      memoryApplications[memIdx] = { ...memoryApplications[memIdx], ...updates };
       savePersistedData("applications", memoryApplications);
     }
     await writeLog(actorName || req.user?.fullName || req.user?.email, "Status Change", `Changed status for ${req.params.id} to ${status || "updated"}`);
@@ -568,10 +569,7 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
   try {
     const actorName = req.body?.actorName || req.query?.actorName || req.user?.fullName || req.user?.email;
-    if (sbClient) {
-      const { error } = await sbClient.from("applicants").delete().eq("id", req.params.id);
-      if (error) console.warn("Supabase delete failed (falling back to memory):", error.message);
-    }
+    await execute("DELETE FROM public.applicants WHERE id = $1", [req.params.id]);
     const idx = memoryApplications.findIndex((a: any) => a.id === req.params.id);
     if (idx !== -1) { memoryApplications.splice(idx, 1); savePersistedData("applications", memoryApplications); }
     await writeLog(actorName, "Delete Application", `Deleted application: ${req.params.id}`);
@@ -581,8 +579,7 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
 
 // ---------- SETTINGS ----------
 app.get("/api/homepage-settings", async (_req: any, res: any) => {
-  let db: any = null;
-  try { if (sbClient) { const { data } = await sbClient.from("homepage_settings").select("*").maybeSingle(); if (data) db = data; } } catch {}
+  let db: any = await queryOne("SELECT * FROM public.homepage_settings LIMIT 1");
   res.json(db ? { ...db, ...memoryHomepageSettings } : memoryHomepageSettings);
 });
 
@@ -598,17 +595,26 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
     if (body.yearsOfService !== undefined) settings.years_of_service = body.yearsOfService;
     if (body.filipinosEmpowered !== undefined) settings.filipinos_empowered = body.filipinosEmpowered;
     if (body.heroImageUrl !== undefined) settings.hero_image_url = body.heroImageUrl;
-    if (body.emergencyContacts !== undefined) settings.emergency_contacts = body.emergencyContacts;
+    if (body.emergencyContacts !== undefined) settings.emergency_contacts = JSON.stringify(body.emergencyContacts);
 
-    if (sbClient) {
-      const { data: existing } = await sbClient.from("homepage_settings").select("id").eq("id", 1).maybeSingle();
-      if (existing) {
-        const { error } = await sbClient.from("homepage_settings").update(settings).eq("id", 1);
-        if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
-      } else {
-        const { error } = await sbClient.from("homepage_settings").insert([{ id: 1, ...settings }]);
-        if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
+    const existing = await queryOne("SELECT id FROM public.homepage_settings WHERE id = 1");
+    if (existing) {
+      const setClauses: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+      for (const [k, v] of Object.entries(settings)) {
+        setClauses.push(`${k} = $${idx++}`);
+        vals.push(v);
       }
+      if (setClauses.length > 0) {
+        vals.push(new Date().toISOString());
+        await execute(`UPDATE public.homepage_settings SET ${setClauses.join(", ")}, updated_at = $${idx} WHERE id = 1`, vals);
+      }
+    } else {
+      await execute(
+        "INSERT INTO public.homepage_settings (id,badge_text,title,description,branches_count,years_of_service,filipinos_empowered,hero_image_url,emergency_contacts) VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8::jsonb)",
+        [settings.badge_text, settings.title, settings.description, settings.branches_count, settings.years_of_service, settings.filipinos_empowered, settings.hero_image_url, settings.emergency_contacts]
+      );
     }
     Object.assign(memoryHomepageSettings, body);
     savePersistedData("homepageSettings", memoryHomepageSettings);
@@ -618,8 +624,7 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
 });
 
 app.get("/api/about-settings", async (_req: any, res: any) => {
-  let db: any = null;
-  try { if (sbClient) { const { data } = await sbClient.from("about_settings").select("*").maybeSingle(); if (data) db = data; } } catch {}
+  let db: any = await queryOne("SELECT * FROM public.about_settings LIMIT 1");
   res.json(db ? { ...db, ...memoryAboutSettings } : memoryAboutSettings);
 });
 
@@ -633,22 +638,31 @@ app.put("/api/about-settings", async (req: any, res: any) => {
     if (body.contactAddress !== undefined) settings.contact_address = body.contactAddress;
     if (body.contactPhone !== undefined) settings.contact_phone = body.contactPhone;
     if (body.contactEmail !== undefined) settings.contact_email = body.contactEmail;
-    if (body.moralCompassValues !== undefined) settings.moral_compass_values = body.moralCompassValues;
-    if (body.legacyTimeline !== undefined) settings.legacy_timeline = body.legacyTimeline;
-    if (body.institutionBranches !== undefined) settings.institution_branches = body.institutionBranches;
-    if (body.moral_compass_values !== undefined) settings.moral_compass_values = body.moral_compass_values;
-    if (body.legacy_timeline !== undefined) settings.legacy_timeline = body.legacy_timeline;
-    if (body.institution_branches !== undefined) settings.institution_branches = body.institution_branches;
+    if (body.moralCompassValues !== undefined) settings.moral_compass_values = JSON.stringify(body.moralCompassValues);
+    if (body.legacyTimeline !== undefined) settings.legacy_timeline = JSON.stringify(body.legacyTimeline);
+    if (body.institutionBranches !== undefined) settings.institution_branches = JSON.stringify(body.institutionBranches);
+    if (body.moral_compass_values !== undefined) settings.moral_compass_values = JSON.stringify(body.moral_compass_values);
+    if (body.legacy_timeline !== undefined) settings.legacy_timeline = JSON.stringify(body.legacy_timeline);
+    if (body.institution_branches !== undefined) settings.institution_branches = JSON.stringify(body.institution_branches);
 
-    if (sbClient) {
-      const { data: existing } = await sbClient.from("about_settings").select("id").eq("id", 1).maybeSingle();
-      if (existing) {
-        const { error } = await sbClient.from("about_settings").update(settings).eq("id", 1);
-        if (error) console.warn("Supabase update failed (falling back to memory):", error.message);
-      } else {
-        const { error } = await sbClient.from("about_settings").insert([{ id: 1, ...settings }]);
-        if (error) console.warn("Supabase insert failed (falling back to memory):", error.message);
+    const existing = await queryOne("SELECT id FROM public.about_settings WHERE id = 1");
+    if (existing) {
+      const setClauses: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+      for (const [k, v] of Object.entries(settings)) {
+        setClauses.push(`${k} = $${idx++}`);
+        vals.push(v);
       }
+      if (setClauses.length > 0) {
+        vals.push(new Date().toISOString());
+        await execute(`UPDATE public.about_settings SET ${setClauses.join(", ")}, updated_at = $${idx} WHERE id = 1`, vals);
+      }
+    } else {
+      await execute(
+        "INSERT INTO public.about_settings (id,mission_text,vision_text,contact_address,contact_phone,contact_email,moral_compass_values,legacy_timeline,institution_branches) VALUES (1,$1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)",
+        [settings.mission_text, settings.vision_text, settings.contact_address, settings.contact_phone, settings.contact_email, settings.moral_compass_values, settings.legacy_timeline, settings.institution_branches]
+      );
     }
     Object.assign(memoryAboutSettings, body);
     savePersistedData("aboutSettings", memoryAboutSettings);
@@ -659,7 +673,8 @@ app.put("/api/about-settings", async (req: any, res: any) => {
 
 app.get("/api/system-settings/:key", async (req: any, res: any) => {
   let dbVal: any = null;
-  try { if (sbClient) { const { data } = await sbClient.from("system_settings").select("value").eq("key", req.params.key).maybeSingle(); if (data) dbVal = data.value; } } catch {}
+  const dbRow = await queryOne("SELECT value FROM public.system_settings WHERE key = $1", [req.params.key]);
+  if (dbRow) dbVal = toJson(dbRow.value);
   const memVal = memorySystemSettings[req.params.key];
   res.json({ value: memVal !== undefined ? memVal : dbVal });
 });
@@ -669,10 +684,10 @@ app.put("/api/system-settings/:key", async (req: any, res: any) => {
   try {
     const key = req.params.key;
     const { value } = req.body;
-    if (sbClient) {
-      const { error } = await sbClient.from("system_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
-      if (error) console.warn("Supabase upsert failed (falling back to memory):", error.message);
-    }
+    await execute(
+      "INSERT INTO public.system_settings (key, value, updated_at) VALUES ($1, $2::jsonb, $3) ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = $3",
+      [key, JSON.stringify(value), new Date().toISOString()]
+    );
     memorySystemSettings[key] = value;
     savePersistedData("systemSettings", memorySystemSettings);
     await writeLog(req.user?.fullName || req.user?.email, "Update Settings", `Updated system setting: ${key}`);
@@ -683,11 +698,8 @@ app.put("/api/system-settings/:key", async (req: any, res: any) => {
 // ---------- SYSTEM LOGS ----------
 app.get("/api/system-logs", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
-  let dbLogs: any[] = [];
-  try { if (sbClient) { const { data, error } = await sbClient.from("system_logs").select("*").order("timestamp", { ascending: false }).limit(200); if (!error && data) dbLogs = data; } } catch {}
-  const seen = new Set(dbLogs.map((l: any) => l.id));
-  for (const mem of memorySystemLogs) { if (!seen.has(mem.id)) { dbLogs.push(mem); } }
-  res.json(dbLogs);
+  const dbLogs = await query("SELECT * FROM public.system_logs ORDER BY timestamp DESC LIMIT 200");
+  res.json(mergeMemory(dbLogs, memorySystemLogs));
 });
 
 // Global error handler
