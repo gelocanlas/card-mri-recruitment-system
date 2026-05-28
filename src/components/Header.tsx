@@ -43,11 +43,11 @@ export default function Header({
       <div className="absolute left-0 right-0 top-full h-3 bg-gradient-to-b from-slate-950/25 to-transparent pointer-events-none backdrop-blur-[1px]" />
       
       {/* Main Bar */}
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center gap-4">
-        {/* Brand logo */}
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 grid grid-cols-3 items-center gap-4">
+        {/* Brand logo (left) */}
         <div 
           onClick={() => { setActiveTab("home"); setMobileMenuOpen(false); }} 
-          className="flex items-center cursor-pointer select-none group shrink-0 transition-all duration-300 hover:scale-[1.02] hover:opacity-95"
+          className="flex items-center cursor-pointer select-none group transition-all duration-300 hover:scale-[1.02] hover:opacity-95 justify-self-start"
           id="brand_logo_header"
         >
           <img 
@@ -67,18 +67,18 @@ export default function Header({
           </div>
         </div>
 
-        {/* Central Nav Menu (visible on tablet md and lg screens) */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
+        {/* Central Nav Menu (center) */}
+        <nav className="hidden md:flex items-center justify-center gap-1">
           <button
             onClick={() => setActiveTab("home")}
             className={`px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-semibold transition-all duration-200 flex items-center gap-1 ${
               activeTab === "home" 
                 ? "bg-slate-100 text-slate-900 shadow-sm" 
-                : "text-slate-300 hover:text-white hover:bg-slate-700/55"
+                : "text-slate-300 hover:text-white"
             }`}
             id="nav_home"
           >
-            <Home className="w-3.5 h-3.5 text-emerald-500" />
+            <Home className="w-3.5 h-3.5" />
             Home
           </button>
           
@@ -87,11 +87,11 @@ export default function Header({
             className={`px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-semibold transition-all duration-200 flex items-center gap-1 ${
               activeTab === "about" 
                 ? "bg-slate-100 text-slate-900 shadow-sm" 
-                : "text-slate-300 hover:text-white hover:bg-slate-700/55"
+                : "text-slate-300 hover:text-white"
             }`}
             id="nav_about"
           >
-            <Info className="w-3.5 h-3.5 text-emerald-500" />
+            <Info className="w-3.5 h-3.5" />
             About
           </button>
 
@@ -102,11 +102,11 @@ export default function Header({
                 className={`px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-semibold transition-all duration-200 flex items-center gap-1 ${
                   activeTab === "dashboard" 
                     ? "bg-slate-100 text-slate-900 shadow-sm" 
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/55"
+                    : "text-slate-300 hover:text-white"
                 }`}
                 id="nav_dashboard"
               >
-                <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                <Layers className="w-3.5 h-3.5" />
                 {currentUser.role === "it_admin" ? "IT Admin Portal" : "Recruitment Board"}
               </button>
 
@@ -115,21 +115,21 @@ export default function Header({
                 className={`px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-semibold transition-all duration-205 flex items-center gap-1 ${
                   activeTab === "settings" 
                     ? "bg-slate-100 text-slate-900 shadow-sm" 
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/55"
+                    : "text-slate-300 hover:text-white"
                 }`}
                 id="nav_settings"
               >
-                <Settings className="w-3.5 h-3.5 text-slate-400" /> Settings
+                <Settings className="w-3.5 h-3.5" /> Settings
               </button>
             </>
           )}
         </nav>
 
-        {/* User Identity and Log Options (visible on tablet and lg screens) */}
-        {currentUser && (
-          <div className="hidden md:flex items-center gap-2 md:gap-3 border-l border-slate-700 pl-3">
-            <div className="flex items-center gap-3 font-sans w-full justify-end">
-              <div className="text-right hidden lg:block animate-in fade-in duration-200">
+        {/* User Identity and Log Options (right) */}
+        <div className="hidden md:flex items-center justify-end gap-3">
+          {currentUser && (
+            <>
+              <div className="text-right hidden lg:block">
                 <p className="text-xs font-bold text-slate-100 leading-tight">
                   {currentUser.fullName}
                 </p>
@@ -152,12 +152,12 @@ export default function Header({
                 <LogOut className="w-3.5 h-3.5" />
                 Logout
               </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         {/* Hamburger Toggle (visible on mobile < md) */}
-        <div className="flex md:hidden ml-auto">
+        <div className="flex md:hidden justify-self-end">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:bg-slate-800/80 rounded-xl border border-slate-800 focus:outline-none cursor-pointer duration-150 shrink-0"
