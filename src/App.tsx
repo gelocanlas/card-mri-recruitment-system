@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Component, ReactNode } from "react";
 import Header from "./components/Header";
 import HomePage from "./components/HomePage";
 import AboutPage from "./components/AboutPage";
@@ -7,8 +7,39 @@ import DashboardPage from "./components/DashboardPage";
 import SettingsPage from "./components/SettingsPage";
 import { JobPosting, UserProfile } from "./types";
 import { authFetch } from "./lib/api";
-import { Building2, House, Info, Briefcase, Lock, LayoutDashboard, Settings, LogOut, WifiOff, Clock } from "lucide-react";
+import { Building2, House, Info, Briefcase, Lock, LayoutDashboard, Settings, LogOut, WifiOff, Clock, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center p-8">
+          <div className="max-w-lg bg-white rounded-2xl shadow-xl p-8 border border-red-200 text-left space-y-4">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertTriangle className="w-6 h-6" />
+              <h2 className="text-lg font-black uppercase">Application Error</h2>
+            </div>
+            <p className="text-sm text-slate-600 font-mono break-all">{this.state.error.message}</p>
+            <details className="text-xs text-slate-500">
+              <summary className="cursor-pointer font-bold">Stack Trace</summary>
+              <pre className="mt-2 whitespace-pre-wrap font-mono text-[10px] text-slate-400 max-h-60 overflow-y-auto">{this.state.error.stack}</pre>
+            </details>
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer">
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   // Navigation Router state initialized using the current pathname mapping
@@ -265,6 +296,7 @@ export default function App() {
   };
 
   return (
+    <ErrorBoundary>
     <div className={`min-h-screen w-full bg-[#F7F5F0] text-[#1A1714] flex flex-col justify-between transition-all duration-200 overflow-x-hidden select-none ${
       textSize === "large" ? "text-lg font-medium" : "text-sm"
     }`}>
@@ -491,5 +523,6 @@ export default function App() {
         </div>
       </footer>
     </div>
+    </ErrorBoundary>
   );
 }
