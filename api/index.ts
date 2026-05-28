@@ -41,7 +41,12 @@ app.use(express.urlencoded({ extended: true, limit: "500kb" }));
 // PostgreSQL connection via Aiven
 const DATABASE_URL = process.env.DATABASE_URL || "";
 let pgPool: any = null;
-try { if (DATABASE_URL) pgPool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } }); } catch (e: any) { console.warn("PG Pool:", e?.message); }
+try {
+  if (DATABASE_URL) {
+    const cleanUrl = DATABASE_URL.replace(/\?sslmode=[^&]*(&|$)/, '').replace(/&$/, '');
+    pgPool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } });
+  }
+} catch (e: any) { console.warn("PG Pool:", e?.message); }
 
 async function query(sql: string, params?: any[]): Promise<any[]> {
   if (!pgPool) return [];
