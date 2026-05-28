@@ -50,22 +50,18 @@ export default function Header({
           className="flex items-center cursor-pointer select-none group shrink-0 transition-all duration-300 hover:scale-[1.02] hover:opacity-95"
           id="brand_logo_header"
         >
-          {/* Strict RESTRICTION: Sharp 28px mobile (h-7 w-7) / 36px desktop (lg:h-9 lg:w-9) */}
           <img 
             src="/card_mri.png" 
-            className="h-7 w-7 lg:h-9 lg:w-9 mr-2 lg:mr-3 hover:scale-105 transition-transform duration-300 object-contain block shrink-0" 
+            className="h-9 w-9 lg:h-12 lg:w-12 mr-3 lg:mr-4 hover:scale-105 transition-transform duration-300 object-contain block shrink-0" 
             alt="CARD MRI Logo"
           />
           <div className="block text-left min-w-0">
-            <h1 className="text-sm lg:text-base font-black tracking-tight text-slate-100 group-hover:text-emerald-400 transition duration-150 uppercase flex items-center leading-none antialiased">
+            <h1 className="text-base lg:text-lg font-black tracking-tight text-slate-100 group-hover:text-emerald-400 transition duration-150 uppercase flex items-center leading-none antialiased">
               CARD MRI
             </h1>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[9px] lg:text-[11px] text-slate-300 font-sans font-bold tracking-wider leading-none">
-                Careers Portal
-              </span>
-              <span className="hidden sm:inline text-[9px] text-emerald-400 font-mono tracking-widest font-extrabold pb-0.5 leading-none">
-                · CARD Recruitment
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] lg:text-xs text-slate-300 font-sans font-bold tracking-wider leading-none">
+                Career Portal
               </span>
             </div>
           </div>
