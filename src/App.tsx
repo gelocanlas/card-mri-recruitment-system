@@ -106,6 +106,9 @@ export default function App() {
 
   // HCI Accessibility Preferences
   const [textSize, setTextSize] = useState<"normal" | "large">("normal");
+  const [fontStyle, setFontStyle] = useState<"sans" | "serif" | "mono">(() => {
+    return (localStorage.getItem("card_mri_font_style") as "sans" | "serif" | "mono") || "sans";
+  });
 
   // Shared Settings Dropdown State managers
   const [statusesList, setStatusesList] = useState<string[]>(() => {
@@ -299,7 +302,7 @@ export default function App() {
     <ErrorBoundary>
     <div className={`min-h-screen w-full bg-[#F7F5F0] text-[#1A1714] flex flex-col justify-between transition-all duration-200 overflow-x-hidden select-none ${
       textSize === "large" ? "text-lg font-medium" : "text-sm"
-    }`}>
+    } ${fontStyle === "serif" ? "font-serif" : fontStyle === "mono" ? "font-mono" : "font-sans"}`}>
       {/* Dynamic Security & Accessibility Navigation Header */}
       <Header
         currentUser={currentUser}
@@ -387,6 +390,8 @@ export default function App() {
                   currentUser={currentUser} 
                   textSize={textSize} 
                   setTextSize={setTextSize} 
+                  fontStyle={fontStyle}
+                  setFontStyle={setFontStyle}
                   statusesList={statusesList}
                   setStatusesList={setStatusesList}
                   institutionsList={institutionsLookup}

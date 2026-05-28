@@ -35,6 +35,8 @@ interface SettingsPageProps {
   currentUser: UserProfile | null;
   textSize: "normal" | "large";
   setTextSize: (size: "normal" | "large") => void;
+  fontStyle?: "sans" | "serif" | "mono";
+  setFontStyle?: (style: "sans" | "serif" | "mono") => void;
   statusesList: string[];
   setStatusesList: React.Dispatch<React.SetStateAction<string[]>>;
   institutionsList: string[];
@@ -150,6 +152,8 @@ export default function SettingsPage({
   currentUser,
   textSize,
   setTextSize,
+  fontStyle = "sans",
+  setFontStyle,
   statusesList,
   setStatusesList,
   institutionsList,
@@ -2205,6 +2209,38 @@ export default function SettingsPage({
                     >
                       {textSize === "large" ? "DEACTIVATE EXTREME SIZE" : "ACTIVATE"}
                     </button>
+                  </div>
+
+                  {/* Font style selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-150 gap-3">
+                    <div>
+                      <span className="font-sans font-black text-slate-900 block text-[11px] uppercase tracking-wider">Font Style</span>
+                      <p className="text-[10px] text-slate-400 leading-normal mt-0.5">Choose typeface across the entire portal.</p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {[
+                        { value: "sans" as const, label: "Sans", preview: "Aa", class: "font-sans" },
+                        { value: "serif" as const, label: "Serif", preview: "Aa", class: "font-serif" },
+                        { value: "mono" as const, label: "Mono", preview: "Aa", class: "font-mono" }
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setFontStyle?.(opt.value);
+                            localStorage.setItem("card_mri_font_style", opt.value);
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                            fontStyle === opt.value
+                              ? "bg-slate-900 text-white shadow-sm"
+                              : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"
+                          } ${opt.class}`}
+                        >
+                          <span className="text-base leading-none block">{opt.preview}</span>
+                          <span className="text-[9px] mt-0.5 block">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Contrast selection */}
