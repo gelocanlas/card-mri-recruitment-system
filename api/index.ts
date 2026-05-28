@@ -187,15 +187,20 @@ const memorySystemSettings: Record<string, any[]> = persistedData.systemSettings
 app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
 app.get("/api/debug/db", async (_req: any, res: any) => {
-  const info: any = { hasUrl: !!process.env.DATABASE_URL, poolExists: !!pgPool, tests: {} };
+  const info: any = { hasUrl: !!process.env.DATABASE_URL, poolExists: !!pgPool, urlPrefix: (process.env.DATABASE_URL || "").slice(0, 20), tests: {} };
   try {
-    const r = await query("SELECT count(*)::int as cnt FROM public.jobs");
-    info.tests.jobs = r.length > 0 ? r[0].cnt : "no rows";
-  } catch (e: any) { info.tests.jobs = "error: " + e.message; }
-  try {
-    const r = await query("SELECT 1 as ok");
-    info.tests.ping = r.length > 0 ? "ok" : "fail";
+    if (!pgPool) { info.tests.ping = "no pool"; }
+    else {
+      const r = await pgPool.query("SELECT 1 as ok");
+      info.tests.ping = r.rows.length > 0 ? "ok" : "empty";
+    }
   } catch (e: any) { info.tests.ping = "error: " + e.message; }
+  try {
+    if (pgPool) {
+      const r = await pgPool.query("SELECT count(*)::int as cnt FROM public.jobs");
+      info.tests.jobs = r.rows.length > 0 ? r.rows[0].cnt : "no rows";
+    }
+  } catch (e: any) { info.tests.jobs = "error: " + e.message; }
   res.json(info);
 });
 
