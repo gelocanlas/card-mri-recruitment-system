@@ -186,6 +186,19 @@ const memorySystemSettings: Record<string, any[]> = persistedData.systemSettings
 
 app.get("/api/health", (_req: any, res: any) => res.json({ status: "ok" }));
 
+app.get("/api/debug/db", async (_req: any, res: any) => {
+  const info: any = { hasUrl: !!process.env.DATABASE_URL, poolExists: !!pgPool, tests: {} };
+  try {
+    const r = await query("SELECT count(*)::int as cnt FROM public.jobs");
+    info.tests.jobs = r.length > 0 ? r[0].cnt : "no rows";
+  } catch (e: any) { info.tests.jobs = "error: " + e.message; }
+  try {
+    const r = await query("SELECT 1 as ok");
+    info.tests.ping = r.length > 0 ? "ok" : "fail";
+  } catch (e: any) { info.tests.ping = "error: " + e.message; }
+  res.json(info);
+});
+
 function mergeMemory(dbItems: any[], memItems: any[]): any[] {
   const memById: Record<string, any> = {};
   for (const m of memItems) memById[m.id] = m;
