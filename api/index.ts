@@ -234,7 +234,7 @@ function mergeMemory(dbItems: any[], memItems: any[]): any[] {
 // ---------- JOBS ----------
 app.get("/api/jobs", async (_req: any, res: any) => {
   const dbJobs = await query("SELECT * FROM public.jobs ORDER BY created_at DESC");
-  res.json(mergeMemory(dbJobs, memoryJobs).map(mapJobToFrontend));
+  res.json(mergeMemory(dbJobs, memoryJobs).map(mapJobToFrontend).filter(Boolean));
 });
 
 app.post("/api/jobs", async (req: any, res: any) => {
@@ -482,7 +482,7 @@ app.delete("/api/screening-questions/:id", async (req: any, res: any) => {
 app.get("/api/applications", async (req: any, res: any) => {
   if (!checkAuth(req, res)) return;
   const dbApps = await query("SELECT * FROM public.applicants ORDER BY created_at DESC");
-  res.json(mergeMemory(dbApps, memoryApplications));
+  res.json(mergeMemory(dbApps, memoryApplications).filter(Boolean));
 });
 
 app.get("/api/api-only-applications", (req: any, res: any) => {

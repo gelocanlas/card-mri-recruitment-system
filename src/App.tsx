@@ -167,7 +167,7 @@ export default function App() {
       const res = await fetch("/api/jobs");
       if (res.ok) {
         const data = await res.json();
-        setJobs(Array.isArray(data) ? data : []);
+        setJobs(Array.isArray(data) ? data.filter(Boolean) : []);
       }
     } catch (e) {
       console.warn("Connection failed reading CARD MRI vacancies db - rendering gracefully with cached state.", e);
