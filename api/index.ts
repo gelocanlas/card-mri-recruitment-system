@@ -580,7 +580,21 @@ app.delete("/api/applications/:id", async (req: any, res: any) => {
 // ---------- SETTINGS ----------
 app.get("/api/homepage-settings", async (_req: any, res: any) => {
   let db: any = await queryOne("SELECT * FROM public.homepage_settings LIMIT 1");
-  res.json(db ? { ...db, ...memoryHomepageSettings } : memoryHomepageSettings);
+  if (db) {
+    res.json({
+      id: db.id,
+      badgeText: db.badge_text,
+      title: db.title,
+      description: db.description,
+      emergencyContacts: toJson(db.emergency_contacts),
+      branchesCount: db.branches_count,
+      yearsOfService: db.years_of_service,
+      filipinosEmpowered: db.filipinos_empowered,
+      heroImageUrl: db.hero_image_url
+    });
+  } else {
+    res.json(memoryHomepageSettings);
+  }
 });
 
 app.put("/api/homepage-settings", async (req: any, res: any) => {
@@ -625,7 +639,21 @@ app.put("/api/homepage-settings", async (req: any, res: any) => {
 
 app.get("/api/about-settings", async (_req: any, res: any) => {
   let db: any = await queryOne("SELECT * FROM public.about_settings LIMIT 1");
-  res.json(db ? { ...db, ...memoryAboutSettings } : memoryAboutSettings);
+  if (db) {
+    res.json({
+      id: db.id,
+      missionText: db.mission_text,
+      visionText: db.vision_text,
+      contactAddress: db.contact_address,
+      contactPhone: db.contact_phone,
+      contactEmail: db.contact_email,
+      moralCompassValues: toJson(db.moral_compass_values),
+      legacyTimeline: toJson(db.legacy_timeline),
+      institutionBranches: toJson(db.institution_branches)
+    });
+  } else {
+    res.json(memoryAboutSettings);
+  }
 });
 
 app.put("/api/about-settings", async (req: any, res: any) => {
@@ -676,7 +704,7 @@ app.get("/api/system-settings/:key", async (req: any, res: any) => {
   const dbRow = await queryOne("SELECT value FROM public.system_settings WHERE key = $1", [req.params.key]);
   if (dbRow) dbVal = toJson(dbRow.value);
   const memVal = memorySystemSettings[req.params.key];
-  res.json({ value: memVal !== undefined ? memVal : dbVal });
+  res.json({ value: dbVal !== null ? dbVal : memVal });
 });
 
 app.put("/api/system-settings/:key", async (req: any, res: any) => {

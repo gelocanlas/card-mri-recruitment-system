@@ -7,7 +7,7 @@ import DashboardPage from "./components/DashboardPage";
 import SettingsPage from "./components/SettingsPage";
 import { JobPosting, UserProfile } from "./types";
 import { authFetch } from "./lib/api";
-import { Building2, House, Info, Briefcase, Lock, LayoutDashboard, Settings, LogOut } from "lucide-react";
+import { Building2, House, Info, Briefcase, Lock, LayoutDashboard, Settings, LogOut, WifiOff, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
@@ -166,6 +166,42 @@ export default function App() {
     return () => window.removeEventListener("auth_unauthorized", handleUnauthorized);
   }, []);
 
+  const [sessionExpiring, setSessionExpiring] = useState(false);
+  useEffect(() => {
+    const token = localStorage.getItem("card_mri_token");
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const exp = payload.exp * 1000;
+      const check = () => {
+        const remaining = exp - Date.now();
+        if (remaining > 0 && remaining < 5 * 60 * 1000) {
+          setSessionExpiring(true);
+        } else if (remaining <= 0) {
+          setSessionExpiring(false);
+          handleLogout();
+        } else {
+          setSessionExpiring(false);
+        }
+      };
+      check();
+      const interval = setInterval(check, 30000);
+      return () => clearInterval(interval);
+    } catch { /* ignore invalid tokens */ }
+  }, [currentUser]);
+
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const go = () => setIsOffline(false);
+    const goAway = () => setIsOffline(true);
+    window.addEventListener("online", go);
+    window.addEventListener("offline", goAway);
+    return () => {
+      window.removeEventListener("online", go);
+      window.removeEventListener("offline", goAway);
+    };
+  }, []);
+
   useEffect(() => {
     const loadDropdownSettings = async () => {
       try {
@@ -244,8 +280,20 @@ export default function App() {
         setTextSize={setTextSize}
       />
 
+      {isOffline && (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-amber-600 text-white text-center py-1.5 px-4 text-[11px] font-bold flex items-center justify-center gap-2" role="alert">
+          <WifiOff className="w-3.5 h-3.5" />
+          You are offline — changes may not be saved
+        </div>
+      )}
+      {sessionExpiring && (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-rose-600 text-white text-center py-1.5 px-4 text-[11px] font-bold flex items-center justify-center gap-2" role="alert">
+          <Clock className="w-3.5 h-3.5" />
+          Your session will expire in 5 minutes — save your work
+        </div>
+      )}
       {/* Main Container - Added pt-24 matching fixed header offset */}
-      <main className="flex-1 w-full px-0 pt-24 pb-20 lg:pb-8 overflow-x-hidden">
+      <main id="main-content" className="flex-1 w-full px-0 pt-24 pb-20 lg:pb-8 overflow-x-hidden">
         <AnimatePresence mode="wait">
           {isTabLoading ? (
             <motion.div
@@ -260,10 +308,10 @@ export default function App() {
                 <img src="/card_mri.png" className="absolute h-7 w-auto object-contain animate-pulse" alt="" />
               </div>
               <p className="mt-5 text-xs font-mono font-black tracking-widest text-emerald-800 uppercase">
-                Compiling Unified Records...
+                Loading...
               </p>
               <p className="text-[10px] text-slate-400 font-sans mt-1">
-                CARD MRI Online Talent Hub Session
+                CARD MRI Careers Portal
               </p>
             </motion.div>
           ) : (

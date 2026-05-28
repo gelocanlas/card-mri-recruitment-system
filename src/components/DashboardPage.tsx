@@ -1253,9 +1253,9 @@ export default function DashboardPage({
                             : "N/A"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadgeStyles(app.status)}`}>
-                            {app.status}
-                          </span>
+<span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadgeStyles(app.status)}`} aria-label={`Status: ${app.status}`}>
+                          {statusIcon[app.status] || ''} {app.status}
+                        </span>
                         </td>
                         <td className="px-4 py-3 text-right w-[180px] min-w-[180px]">
                           <div className="flex items-center justify-end gap-1.5">
@@ -1313,8 +1313,8 @@ export default function DashboardPage({
                           </span>
                         </div>
                       </div>
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadgeStyles(app.status)}`}>
-                        {app.status}
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadgeStyles(app.status)}`} aria-label={`Status: ${app.status}`}>
+                        {statusIcon[app.status] || ''} {app.status}
                       </span>
                     </div>
 
@@ -2284,7 +2284,7 @@ export default function DashboardPage({
 function getStatusBadgeStyles(status: string) {
   switch (status) {
     case 'New':
-      return 'bg-sky-50 text-sky-700 border border-sky-305';
+      return 'bg-sky-50 text-sky-700 border border-sky-300';
     case 'Acknowledge':
       return 'bg-blue-50 text-blue-700 border border-blue-200';
     case 'Passed Screening':
@@ -2298,6 +2298,16 @@ function getStatusBadgeStyles(status: string) {
     case 'Rejected (With Relatives)':
       return 'bg-red-50 text-red-700 border border-red-200';
     default:
-      return 'bg-amber-50 text-amber-700 border border-amber-205';
+      return 'bg-amber-50 text-amber-700 border border-amber-200';
   }
 }
+
+const statusIcon: Record<string, string> = {
+  'New': '\u{1F4CB}',
+  'Acknowledge': '\u{1F4E8}',
+  'Passed Screening': '\u{1F50D}',
+  'Already Endorsed': '\u{1F4E6}',
+  'Hired': '\u{2705}',
+  'Rejected': '\u{274C}',
+  'Rejected (With Relatives)': '\u{26D4}'
+};

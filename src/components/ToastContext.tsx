@@ -93,7 +93,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
       {children}
 
       {/* Toast Notifications List */}
-      <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2.5 max-w-md w-full px-4 pointer-events-none">
+      <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2.5 max-w-md w-full px-4 pointer-events-none" role="status" aria-live="polite" aria-label="Notifications">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
