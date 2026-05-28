@@ -55,12 +55,12 @@ export default function Header({
             className="h-9 w-9 lg:h-12 lg:w-12 mr-3 lg:mr-4 hover:scale-105 transition-transform duration-300 object-contain block shrink-0" 
             alt="CARD MRI Logo"
           />
-          <div className="block text-left min-w-0">
-            <h1 className="text-base lg:text-lg font-black tracking-tight text-slate-100 group-hover:text-emerald-400 transition duration-150 uppercase flex items-center leading-none antialiased">
+          <div className="block text-left">
+            <h1 className="text-lg lg:text-xl font-black tracking-tight text-slate-100 group-hover:text-emerald-400 transition duration-150 uppercase leading-tight antialiased">
               CARD MRI
             </h1>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-[10px] lg:text-xs text-slate-300 font-sans font-bold tracking-wider leading-none">
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="text-xs lg:text-sm text-slate-300 font-sans font-bold tracking-wider leading-snug">
                 Career Portal
               </span>
             </div>
