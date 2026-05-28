@@ -43,8 +43,15 @@ const DATABASE_URL = process.env.DATABASE_URL || "";
 let pgPool: any = null;
 try {
   if (DATABASE_URL) {
-    const cleanUrl = DATABASE_URL.replace(/\?sslmode=[^&]*(&|$)/, '').replace(/&$/, '');
-    pgPool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } });
+    const u = new URL(DATABASE_URL);
+    pgPool = new Pool({
+      host: u.hostname,
+      port: parseInt(u.port, 10) || 5432,
+      database: u.pathname.replace(/^\//, '') || 'defaultdb',
+      user: u.username,
+      password: u.password,
+      ssl: { rejectUnauthorized: false }
+    });
   }
 } catch (e: any) { console.warn("PG Pool:", e?.message); }
 
