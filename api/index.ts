@@ -220,6 +220,13 @@ app.get("/api/debug/db", async (_req: any, res: any) => {
       info.tests.jobs = r.rows.length > 0 ? r.rows[0].cnt : "no rows";
     }
   } catch (e: any) { info.tests.jobs = "error: " + e.message; }
+  try {
+    if (pgPool) {
+      const r = await pgPool.query("SELECT id, title, department FROM public.jobs ORDER BY created_at DESC");
+      info.rawJobs = r.rows.map((row: any) => ({ id: row.id, title: row.title, department: row.department }));
+    }
+  } catch (e: any) { info.rawJobs = "error: " + e.message; }
+  info.memoryJobIds = memoryJobs.map((j: any) => j.id);
   res.json(info);
 });
 
