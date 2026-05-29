@@ -5,8 +5,23 @@ import path from "path";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
 
 process.on("unhandledRejection", (reason) => { console.error("UNHANDLED REJECTION:", reason); });
+
+const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const APP_NAME = "CARD MRI Recruitment Portal";
+
+const resetCodes = new Map<string, { code: string; expiresAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, entry] of resetCodes) {
+    if (entry.expiresAt < now) resetCodes.delete(email);
+  }
+}, 60000);
 
 function persistPath(): string {
   return path.join(process.cwd(), "api", ".data.json");
@@ -338,6 +353,72 @@ app.post("/api/auth/login", async (req: any, res: any) => {
     await writeLog(email, "Login", "Success");
     res.json({ message: "Login ok", user: { ...mapUserToFrontend(dbUser), token } });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/auth/forgot-password", async (req: any, res: any) => {
+  try {
+    const { email } = req.body;
+    if (!email) { res.status(400).json({ error: "Email is required" }); return; }
+    const normalized = email.toLowerCase().trim();
+    let dbUser: any = await queryOne("SELECT * FROM public.users WHERE LOWER(email) = LOWER($1)", [normalized]);
+    if (!dbUser) dbUser = memoryUsers.find((u: any) => u.email.toLowerCase() === normalized);
+    if (!dbUser) { res.status(404).json({ error: "No account found with that email" }); return; }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    resetCodes.set(normalized, { code, expiresAt: Date.now() + 600000 });
+
+    if (SMTP_USER && SMTP_PASS) {
+      const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: { user: SMTP_USER, pass: SMTP_PASS }
+      });
+      await transporter.sendMail({
+        from: `"${APP_NAME}" <${SMTP_USER}>`,
+        to: normalized,
+        subject: "Your Password Reset Code",
+        text: `Your password reset code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+          <h2 style="color:#065f46;">Password Reset Code</h2>
+          <p style="font-size:14px;color:#374151;">Use the code below to reset your password. It expires in 10 minutes.</p>
+          <div style="background:#f3f4f6;padding:16px;border-radius:12px;text-align:center;font-size:32px;letter-spacing:8px;font-weight:900;color:#065f46;">${code}</div>
+          <p style="font-size:12px;color:#9ca3af;margin-top:16px;">If you did not request this, ignore this email.</p>
+        </div>`
+      });
+    } else {
+      console.warn("SMTP not configured — reset code for", normalized, "is", code);
+    }
+
+    res.json({ message: "If the email exists, a reset code has been sent." });
+  } catch (err: any) {
+    console.warn("forgot-password error:", err.message);
+    res.json({ message: "If the email exists, a reset code has been sent." });
+  }
+});
+
+app.post("/api/auth/reset-password", async (req: any, res: any) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) { res.status(400).json({ error: "Email, code, and new password required" }); return; }
+    if (newPassword.length < 6) { res.status(400).json({ error: "Password must be at least 6 characters" }); return; }
+
+    const normalized = email.toLowerCase().trim();
+    const entry = resetCodes.get(normalized);
+    if (!entry || entry.code !== code) { res.status(400).json({ error: "Invalid or expired reset code" }); return; }
+    if (entry.expiresAt < Date.now()) { resetCodes.delete(normalized); res.status(400).json({ error: "Reset code has expired" }); return; }
+
+    resetCodes.delete(normalized);
+    const hashed = await bcrypt.hash(newPassword, 12);
+    const pwUpdated = await execute("UPDATE public.users SET password = $1 WHERE LOWER(email) = LOWER($2)", [hashed, normalized]);
+    const memIdx = memoryUsers.findIndex((u: any) => u.email.toLowerCase() === normalized);
+    if (memIdx !== -1) { memoryUsers[memIdx].password = hashed; savePersistedData("users", memoryUsers); }
+    await writeLog(normalized, "Password Reset", "Password reset via email code");
+    res.json({ message: "Password has been reset successfully." });
+  } catch (err: any) {
+    console.warn("reset-password error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------- USERS ----------
